@@ -97,20 +97,19 @@ def in_range(S,r):
 
 
 
-            
-
+  
 def gene_by_snp_dict(GG):
     s_dict = {}
     for g in GG.values():
         for s in g.snps:
-            s_dict[s] = set()
-    for g in GG.values():
-        for s in g.snps:
-            s_dict[s].add(g)
+            if s not in s_dict:
+                s_dict[s] = {g.index}
+            else:
+                s_dict[s].add(g.index)
     return s_dict
 
-def make_genomic_graph(GG):
-    s_dict = gene_by_snp_dict(GG)
+def make_genomic_graph(GG): #making neighbours
+    s_dict = gene_by_snp_dict(GG) #snp to gene
     for x in GG:
         g = GG[x]
         g.neighbors = set()
@@ -119,28 +118,27 @@ def make_genomic_graph(GG):
         for s in g.snps:
             for y in s_dict[s]:
                 g.neighbors.add(y)
-    
+ 
     
     
         
-def build_genomic_comp(start):
+def build_genomic_comp(start, GG):
         #builds connected component containing the node start
         #returns ordered list of nodes in component
-    s = set([start])
-    old_batch = set([start])
+    s = {start.index}
+    old_batch = {start.index}
     while len(old_batch) > 0:
-            new_batch = set([])
+            new_batch = set()
             for g in old_batch:
-                    new_batch = new_batch.union(g.neighbors)
+                    new_batch = new_batch.union(GG[g].neighbors)
             new_batch = new_batch.difference(s)
             s=s.union(new_batch)
             old_batch = new_batch
-
     return s
 
 
 def build_all_genomic_comps(GG):
-
+        #print("GG", GG)
 
         ##For regular comps not genomic:
         #builds connected component dictionaries
@@ -151,13 +149,12 @@ def build_all_genomic_comps(GG):
         for start in GG:
             if not GG[start].snps == []:
                 if not comps_dict.has_key(start):
-                    s = build_genomic_comp(GG[start])
+                    s = build_genomic_comp(GG[start], GG)
                     comps[start] = s
-                    h = map(lambda x:x.index,s)
-                    m = min(h)
+                    m = min(s)
                     for g in s:
-                        comps_dict[g.index] = m
-                        comps[g.index] = s
+                        comps_dict[g] = m
+                        comps[g] = s
         return comps,comps_dict
 
 
@@ -165,7 +162,7 @@ def build_all_genomic_comps(GG):
 def assign_reads_to_genomic_regions(genes,reads):
     comps,comps_dict = build_all_genomic_comps(genes)
     comps_mins_dict = gene_comps_by_mins(comps,comps_dict)
-    S_G,G_S = snp_to_genomic_region(comps_mins_dict)
+    S_G,G_S = snp_to_genomic_region(comps_mins_dict, genes)
     reads_by_gene = {m:[] for m in comps_mins_dict}
     reads_by_gene['Over Seen'] = []
     reads_by_gene['Not Seen'] = []
@@ -194,11 +191,11 @@ def gene_comps_by_mins(comps,comps_dict):
         gcbm[m]  = comps[m]
     return gcbm
 
-def snp_to_genomic_region(gcmb):
+def snp_to_genomic_region(gcmb, GG):
     SNP_GR = {}
     for m in gcmb:
         for g in gcmb[m]:
-            for s in g.snps:
+            for s in GG[g].snps:
                 SNP_GR[s] = m
     GR_SNP = {m:[] for m in gcmb}
     for s in SNP_GR:
@@ -206,5 +203,3 @@ def snp_to_genomic_region(gcmb):
     for m in GR_SNP:
         GR_SNP[m] = sorted(GR_SNP[m])
     return SNP_GR,GR_SNP
-
-

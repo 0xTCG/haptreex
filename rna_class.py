@@ -115,13 +115,12 @@ class RNA_DATA(object):
 ######################################################################
         
  
-
         def assign_reads_to_indiv_genes(self):
             D = {gr:{} for gr in self.comps_mins_dict}
             for gr in self.comps_mins_dict:
                 for g in self.comps[gr]:
                     D[gr][g] = []
-                    snps = g.snps
+                    snps = self.genes[g].snps
                     for r in self.reads_by_GR[gr]:
                         tf = True
                         for k in r.keys:
@@ -140,12 +139,12 @@ class RNA_DATA(object):
                 D[gr] = {s:[] for s in snps}
                 start = gr
                 if len(self.comps[start]) == 1:
-                    gene = list(self.comps[start])[0]
+                    gene = self.genes[list(self.comps[start])[0]]
                     final[min(gene.snps)] = sorted(gene.snps)
                 else:
                     for gene in self.comps[start]:
-                        for snp in gene.snps:
-                            D[gr][snp].append(gene.index)
+                        for snp in self.genes[gene].snps:
+                            D[gr][snp].append(gene)
                             
                     for snp in D[gr]:
                         D[gr][snp] = tuple(sorted(D[gr][snp]))
@@ -158,6 +157,7 @@ class RNA_DATA(object):
                     for snps in tmp.values():
                         final[min(snps)] = sorted(snps)
             return final
+                   
                                     
                 
 ######################################################################
@@ -219,7 +219,7 @@ class RNA_DATA(object):
             for s in self.read_dict:
                 counts = [0,0]
                 for r in self.read_dict[s]:
-                    counts[r.read[s]] += r.count
+                    counts[r.read[s]//2] += r.count
                 all_counts[s] = counts
             return all_counts
 
