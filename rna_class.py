@@ -219,7 +219,7 @@ class RNA_DATA(object):
             for s in self.read_dict:
                 counts = [0,0]
                 for r in self.read_dict[s]:
-                    counts[r.read[s]//2] += r.count
+                    counts[r.read[s]%2] += r.count
                 all_counts[s] = counts
             return all_counts
 

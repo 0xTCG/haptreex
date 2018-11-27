@@ -31,7 +31,7 @@ def get_counts(snps,reads,shuffle = True):
             back[snps[i]]=i
     for R in reads:
         for snp in R.keys:
-            counts[back[snp]][R.read[snp]//2]+=R.count
+            counts[back[snp]][R.read[snp]%2]+=R.count
     return counts
 
 
