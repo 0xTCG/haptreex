@@ -90,7 +90,7 @@ def RNA_solution(start,threshold,p,error,read_dict,components):
         init = {0:{},1:{}}
         LISTS = [init]
         DICT = {0:0}
-        skipped = False #set to True to allow allele permutations
+        skipped = True #set to True to allow allele permutations
         m_prev = None
         for m in components[start]:
             if skipped:
