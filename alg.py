@@ -26,7 +26,7 @@ def branch(m,m_prev,LISTS,DICT,threshold,p,error,read_dict):
                         costs[c] = probs.read_val_tail(partial_phase, p, error, read_dict, m, m_prev)
 
                 max_cost = max(costs.values())
-                new_costs = {key: costs[key]-max_cost for key in costs.keys()}
+                new_costs = {key: costs[key]-max_cost for key in list(costs.keys())}
                 used = False
                 for c in costs.keys():
                         if new_costs[c] >= math.log(threshold/float(1-threshold)):
@@ -79,7 +79,7 @@ def prune(m,LISTS,DICT,components):
                 #for thing in new_lists:
                 #    print(tup_of_dict(thing))
                 #print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-                new_index = random.randint(0, len(new_lists)-1)
+                new_index = 0 #random.randint(0, len(new_lists)-1)
                 new_lists = [new_lists[new_index]]
                 new_dict = {0:new_dict[new_index]}
         return new_lists,new_dict

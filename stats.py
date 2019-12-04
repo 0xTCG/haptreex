@@ -18,28 +18,31 @@ def stats(RD,size_factor,rate_factor,rate_cutoff,coverage_cutoff,rate_dep_cutoff
 
     ### all of these current_STU* filter the set of SNPs we are going to try to phase
     current_STU0 = RD.snps_to_use
-    #print "Original RD SNP dictionary size: ", len(current_STU0)
+    print("Original RD SNP dictionary size: ", len(current_STU0), num_SNP(current_STU0))
     current_STU1 = RD_updates.update_snps_to_use_rate(RD,current_STU0,rate_cutoff)
-    #print "STU1(rate_cutoff) RD SNP dictionary size: ", len(current_STU1)
+    print("STU1(rate_cutoff) RD SNP dictionary size: ", len(current_STU1), num_SNP(current_STU1))
     current_STU2 = RD_updates.update_snps_to_use_coverage(RD,current_STU1,coverage_cutoff)
-    #print "STU2(coverage_cutoff) RD SNP dictionary size: ", len(current_STU2)
+    print("STU2(coverage_cutoff) RD SNP dictionary size: ", len(current_STU2), num_SNP(current_STU2))
     current_STU3 = RD_updates.update_snps_to_use_size_cluster(RD,current_STU2,size_factor)
-    #print "STU3(size_factor) RD SNP dictionary size: ", len(current_STU3)
+    print("STU3(size_factor) RD SNP dictionary size: ", len(current_STU3), num_SNP(current_STU3))
     current_STU4 = RD_updates.update_snps_to_use_rate_dependent_cutoff(RD,current_STU3,rate_dep_cutoff,conf)
-    #print "STU4(rate_dep_cutoff,conf) RD SNP dictionary size: ", len(current_STU4)
+    print("STU4(rate_dep_cutoff,conf) RD SNP dictionary size: ", len(current_STU4), num_SNP(current_STU4))
+#    print current_STU4
     current_STU5 = RD_updates.update_snps_to_use_cutoff(RD,current_STU4,cutoff)
-    #print "STU5(cutoff) RD SNP dictionary size: ", len(current_STU5)
+    print("STU5(cutoff) RD SNP dictionary size: ", len(current_STU5), num_SNP(current_STU5))
+#    print current_STU5
     current_STU6 = RD_updates.update_snps_to_use_rate_cluster(RD,current_STU5,rate_factor)
-    #print "STU6(rate_factor) RD SNP dictionary size: ", len(current_STU6)
+    print("STU6(rate_factor) RD SNP dictionary size: ", len(current_STU6), num_SNP(current_STU6))
+#    print current_STU6
 
     RD.make_components(current_STU6)
     X = alg.RNA_phase(.0001,global_vars.pair_thresh,RD.error,RD.read_dict,RD.comp_mins,RD.components)
     S =[switches_in_comp2(x,X,global_vars.V,RD)[0] for x in X]
     #print sum(S), len(RD.components), len(X)
     if len(RD.components) == 0:
-        print "Warning: No fragments covering only 1 SNPs were found in the RNAfragmat input"
-        print "HapTree-X will not consider differential allele-specific expression (DASE) during phasing"
-        print "If you would like to use DASE as well, please run chair with parameter 1"
+        print("Warning: No fragments covering only 1 SNPs were found in the RNAfragmat input")
+        print("HapTree-X will not consider differential allele-specific expression (DASE) during phasing")
+        print("If you would like to use DASE as well, please run chair with parameter 1")
 
     C = con_dis_non(X,global_vars.V)[1]
     #print sum(C),C[0],C[1]
@@ -58,6 +61,9 @@ def stats(RD,size_factor,rate_factor,rate_cutoff,coverage_cutoff,rate_dep_cutoff
                 #                print X[x][0][y],
                 #for y in sorted(X[x][0]):
                 #                print global_vars.V[0][y],
+
+def num_SNP(STU):
+    return sum(map(len, list(STU.values())))
 
 def get_counts2(snps,read_dict):
     ##requires all reads to have length 1
@@ -164,9 +170,9 @@ def restrict_phasing(snp_to_gr, phasing_comps_old):
         local_comps_by_gr = {}
         comp = phasing_comps_old[m][0]
         for snp in comp:
-            if snp_to_gr.has_key(snp):
+            if snp in snp_to_gr:
                 gr = snp_to_gr[snp]
-                if local_comps_by_gr.has_key(gr):
+                if gr in local_comps_by_gr:
                     local_comps_by_gr[gr].append(snp)
                 else:
                     local_comps_by_gr[gr] = [snp]
@@ -184,8 +190,8 @@ def restrict_phasing(snp_to_gr, phasing_comps_old):
 
 def phasing_completeness(phasing):
     num_comps = len(phasing)
-    num_snps    = sum(map(lambda x: len(x[0]), phasing.values()))
-    print "num_comps: ",num_comps, "num_snps: ", num_snps, "completeness:  ", num_snps - num_comps,
+    num_snps    = sum([len(x[0]) for x in phasing.values()])
+    print("num_comps: ",num_comps, "num_snps: ", num_snps, "completeness:  ", num_snps - num_comps, end=' ')
     return num_snps - num_comps
 
 def count_all_switches(phasing,V):

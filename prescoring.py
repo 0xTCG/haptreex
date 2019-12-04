@@ -51,9 +51,9 @@ def make_golden_from_true2(filename):
     i = 0
     while a[i][0] == '#':
         i+=1
-    c = map(lambda x:x.split()[9][:3],a[i:])
-    vChroms = map(lambda x:x.split()[0], a[i:])  
-    vPositions = map(lambda x:x.split()[1], a[i:])  
+    c = [x.split()[9][:3] for x in a[i:]]
+    vChroms = [x.split()[0] for x in a[i:]]  
+    vPositions = [x.split()[1] for x in a[i:]]  
     d = {0:{},1:{}}
     for j in range(len(c)):
             if c[j][1] == '|':

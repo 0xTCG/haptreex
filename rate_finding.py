@@ -8,8 +8,8 @@ def find_rates(snps,reads,rate):
     counts = get_counts(snps,reads)
     m = max(map(max,counts.values()))
 
-    if m == 0: print "should not happen",snps,reads
-    elif m > lb_for_approx: r = approx_rate(counts.values())
+    if m == 0: print("should not happen",snps,reads)
+    elif m > lb_for_approx: r = approx_rate(list(counts.values()))
     else: r = NW(counts,rate)
     
     return {0:r,1:1-r} ##had swapped
@@ -85,7 +85,7 @@ def trans(s1,s2,rate):
 
 
 def forward(FD,X,vec,i,rate,p):    
-    if FD.has_key((X,i)):
+    if (X,i) in FD:
         return FD[(X,i)]
     e = .0001
     p = (p*(1-e) + (1-p)*(e))
@@ -103,9 +103,9 @@ def forward(FD,X,vec,i,rate,p):
         Y=vec[i]
         f0 = forward(FD,0,vec,i-1,rate,p)  
         f1 = forward(FD,1,vec,i-1,rate,p)
-        if not FD.has_key((0,i-1)):
+        if (0,i-1) not in FD:
             FD[(0,i-1)] = (10**10)*f0
-        if not FD.has_key((1,i-1)):
+        if (1,i-1) not in FD:
             FD[(1,i-1)] = (10**10)*f1
                 
         SUM_log = math.log(trans(0,X,rate)*f0 + trans(1,X,rate)*f1)
@@ -113,7 +113,7 @@ def forward(FD,X,vec,i,rate,p):
         binom_log = math.log(choose(sum(Y),Y[0]))
         f_val = math.exp(SUM_log + sample_prob_log + binom_log)
         
-        if not FD.has_key((X,i)):
+        if (X,i) not in FD:
             FD[(X,i)] = 10**10*f_val
         return 10**10*f_val
 

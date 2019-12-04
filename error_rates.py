@@ -194,7 +194,7 @@ def count_consecutive_switches(t_dict, hap, allele):
 # combine two dicts
 def merge_dicts(d1,d2):
     d3 = d2.copy()
-    for k, v in d1.items():
+    for k, v in list(d1.items()):
         assert(k not in d3)
         d3[k] = v
     return d3
@@ -374,7 +374,7 @@ class error_result():
 
     def get_AN50(self):
         AN50 = 0
-        AN50_spanlst = sum(self.AN50_spanlst.values(),[])
+        AN50_spanlst = sum(list(self.AN50_spanlst.values()),[])
         AN50_spanlst.sort(reverse=True)
         phased_sum = 0
         for span, phased in AN50_spanlst:
@@ -386,7 +386,7 @@ class error_result():
 
     def get_N50(self):
         N50  = 0
-        N50_spanlst = sum(self.N50_spanlst.values(),[])
+        N50_spanlst = sum(list(self.N50_spanlst.values()),[])
         N50_spanlst.sort(reverse=True)
 
         total = 0

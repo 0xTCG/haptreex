@@ -89,7 +89,7 @@ def make_golden_from_true(filename,G):
     f = open(filename,'r')
     a = f.readlines()
     f.close()
-    c = map(lambda x:x.split('\t')[10][:3],a)
+    c = [x.split('\t')[10][:3] for x in a]
     d = {m:{0:{},1:{}} for m in G.comp_mins}
     for m in G.comp_mins:
         for j in G.components[m]:

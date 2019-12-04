@@ -39,7 +39,7 @@ class RNA_DATA(object):
            
             #print set(chroms.values())
             self.nodekeys = sorted(list(self.node_keys()))
-            #print len(self.nodekeys)
+
 
             d = {}
             chrom_list = {}
@@ -58,12 +58,12 @@ class RNA_DATA(object):
 
 ######################################################################
             #print self.phasable_positions.keys()
-            print 'running through genes' 
+            print('running through genes') 
             for g in self.genes:
                 self.genes[g].find_SNPs(self)
 
             gene_class.make_genomic_graph(self.genes)
-            print 'graph made'
+            print('graph made')
             
 ######################################################################
             #reads = self.read_list
@@ -87,9 +87,9 @@ class RNA_DATA(object):
             self.read_dict = self.make_read_dict() ##1-reads only
             self.counts = self.assign_counts_to_indiv_snps()
             self.LLsnp = self.assign_LL_dif_to_snps()
-            print 'assigning rates'
+            print('assigning rates')
             self.rates  = self.assign_rates2(self.snps_to_use)[0]
-            print 'rates assigned'
+            print('rates assigned')
 
             current_STU0 = self.snps_to_use
 
@@ -101,7 +101,7 @@ class RNA_DATA(object):
             for r in self.read_list.values():
                 for k in r.keys:
                     s[k] = 0
-            return s.keys()
+            return list(s.keys())
         
         def make_position_dict(self):
             position_to_SNP_index_dict = {chrom:{} for chrom in self.chrom_list}
@@ -150,7 +150,7 @@ class RNA_DATA(object):
                         D[gr][snp] = tuple(sorted(D[gr][snp]))
                     tmp = {}
                     for s in D[gr]:
-                        if not tmp.has_key(D[gr][s]):
+                        if D[gr][s] not in tmp:
                                 tmp[D[gr][s]] = [s]
                         else:
                                 tmp[D[gr][s]].append(s)
@@ -188,6 +188,18 @@ class RNA_DATA(object):
                 if len(snps)>1:
                     snps_to_use[min(snps)] = sorted(snps)
             return snps_to_use
+
+        # def find_snps_to_use_all(self):
+        #     f = open("genomic_region_to_SNPs.dict","w")
+        #     t= "\t"
+        #     snps_to_use = {}
+        #     for start in self.genomic_region_to_SNPs:
+        #         snps = self.genomic_region_to_SNPs[start]
+        #         f.write(str(start)+t+str(snps)+t+str(len(snps))+"\n")
+        #         if len(snps)>1:
+        #             snps_to_use[min(snps)] = sorted(snps)
+        #     f.close()
+        #     return snps_to_use
 
 
 ######################################################################
@@ -268,14 +280,14 @@ class RNA_DATA(object):
                     for r in self.reads_by_comsnps[m]:
                         if len(r.keys)==1 :
                                 k = r.keys[0]
-                                if read_dicts.has_key(k):
+                                if k in read_dicts:
                                         read_dicts[k].append(r)
                                 else:
                                         read_dicts[k] = [r]
                         else:                                        
                                 for k in r.keys:
                                     new_read = read_class.READ({k:r.read[k]},r.count,-1)
-                                    if read_dicts.has_key(k):
+                                    if k in read_dicts:
                                             read_dicts[k].append(new_read)
                                     else:
                                             read_dicts[k] = [new_read]
@@ -285,7 +297,7 @@ class RNA_DATA(object):
                 read_dict_full = {}
                 for r in self.all_reads.values():
                         for k in r.keys:
-                                if read_dict_full.has_key(k):
+                                if k in read_dict_full:
                                         read_dict_full[k].append(r)
                                 else:
                                        read_dict_full[k] = [r]

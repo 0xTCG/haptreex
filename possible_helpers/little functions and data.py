@@ -8,14 +8,14 @@ def covered_by_at_least(D,lower):
 def make_BC_ds(RD):
     BC = {}
     ds = {}
-    for r in RD.short_read_list.values():
+    for r in list(RD.short_read_list.values()):
 	k = r.keys[0]
-	if BC.has_key(k):
+	if k in BC:
 		BC[k] +=r.count
 	else:
 		BC[k] = r.count
-    for v in BC.values():
-        if ds.has_key(v):
+    for v in list(BC.values()):
+        if v in ds:
             ds[v]+=1
         else:
             ds[v] = 1
@@ -24,7 +24,7 @@ def make_BC_ds(RD):
 
 def coverage_of_snps_to_use(BC,STU, lower):
     t = 0
-    for snps in STU.values():
+    for snps in list(STU.values()):
         for snp in snps:
             if BC[snp]>= lower:
                 t+=1

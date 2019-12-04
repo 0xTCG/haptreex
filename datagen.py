@@ -10,7 +10,7 @@ import re
 ###########################################################################
 #GENES
 def determine_genes(gene_data,chroms):
-        print 'Loading and formatting genes'
+        print('Loading and formatting genes')
         f = open(gene_data,'r')
         a = list(f.readlines())
         f.close()
@@ -22,7 +22,7 @@ def determine_genes(gene_data,chroms):
                 if y[0] in chroms:
                         starts = map(int,y[11].split(',')[:-1])
                         starts = [i+int(y[1])+1 for i in starts] #Convert 0-based start positions relative to gene to 1-based genomic positions
-                        lengths = map(int,y[10].split(',')[:-1])
+                        lengths = list(map(int,y[10].split(',')[:-1]))
                         g = gene_class.gene(y[3],y[0],int(y[1])+1,int(y[2]),y[5],int(y[9]),lengths,starts,'','')
                         genes[c] = g
                         g.index = c
@@ -30,7 +30,7 @@ def determine_genes(gene_data,chroms):
         return genes
 
 def determine_genes_gtf(gene_data,chroms):
-        print 'Loading and formatting genes'
+        print('Loading and formatting genes')
         f = open(gene_data,'r')
         a = list(f.readlines())
         #print 'done reading lines'
@@ -96,7 +96,7 @@ def determine_genes_gtf(gene_data,chroms):
                         sign = y[6]
                         z = y[8]
                         w = z.split('; ')
-                        v = map(lambda xx:xx.split(' '),w)
+                        v = [xx.split(' ') for xx in w]
                         gene_id = v[0][1][1:-1]
                         transcript_id = v[1][1][1:-1]
                         gene_type = v[2][1][1:-1]
@@ -106,13 +106,13 @@ def determine_genes_gtf(gene_data,chroms):
                         transcripts[j] = gene_class.gene(transcript_id,chrom,bp_start,bp_end,sign,exon_count,
                                               exon_lengths,exon_starts,gene_id,gene_type)
                         transcripts[j].index = j
-
+                        
         return transcripts
 
 def build_isodict(isoforms):
         isodict = {}
         f = open(isoforms)
-        temp = map(lambda x: x.split('\t'),f.readlines())
+        temp = [x.split('\t') for x in f.readlines()]
         for i in range(1,len(temp)):
             isodict[temp[i][0]]=[float(temp[i][9]),temp[i][3]]
         return isodict
@@ -132,7 +132,7 @@ def filter_transcripts(genes,isodict):
                 g = genes[j]
                 tid = g.transcript_id
                 types.add(genes[j].gene_type)
-                if isodict.has_key(tid):
+                if tid in isodict:
                         val = isodict[tid][0]
                         if val>0:
                                 if val/gene_cov[isodict[tid][1]]>.01:
@@ -153,8 +153,8 @@ def make_read_of_frag(frag0):
         qual = frag[-1][0]
         frag = frag[:-1]
         if len(frag)%2 ==1:
-                print 'fragment file error'
-                print frag
+                print('fragment file error')
+                print(frag)
 
         for i in range(0,len(frag),2):
                 key = int(frag[i])
@@ -169,7 +169,7 @@ def make_read_of_frag(frag0):
 
 def make_readlist_from_fragmat(fragmats):
         #translates fragment matrix into a list of reads
-        print 'Loading and formatting fragments'
+        print('Loading and formatting fragments')
         a = []
         for fragmat in fragmats:
             f = open(fragmat,'r')
@@ -189,20 +189,20 @@ def make_readlist_from_fragmat(fragmats):
                 #if not i%1000000:
                 #        print i,
 
-        print str(len(read_list_list))+ ' reads of sufficient quality'
+        print(str(len(read_list_list))+ ' reads of sufficient quality')
         read_list = {}
         read_counter = {}
         i =0
         for tup_read in read_list_list:
             i+=1
-            if read_counter.has_key(tup_read):
+            if tup_read in read_counter:
                 read_counter[tup_read]+=1
             else:
                 read_counter[tup_read] = 1
             #if not i%100000:
             #    print i,
         i = 0
-        print str(len(read_counter)) + ' distinct reads'
+        print(str(len(read_counter)) + ' distinct reads')
         for tup in read_counter:
             read = {}
             for k,v in tup:
@@ -217,7 +217,7 @@ def make_readlist_from_fragmat(fragmats):
 
 def make_readlist_from_fragmat_skip_1_reads(fragmats):
         #translates fragment matrix into a list of reads
-        print 'Loading and formatting fragments'
+        print('Loading and formatting fragments')
         a = []
         for fragmat in fragmats:
             f = open(fragmat,'r')
@@ -237,20 +237,20 @@ def make_readlist_from_fragmat_skip_1_reads(fragmats):
                 #if not i%1000000:
                 #        print i,
 
-        print str(len(read_list_list))+ ' reads of sufficient quality'
+        print(str(len(read_list_list))+ ' reads of sufficient quality')
         read_list = {}
         read_counter = {}
         i =0
         for tup_read in read_list_list:
             i+=1
-            if read_counter.has_key(tup_read):
+            if tup_read in read_counter:
                 read_counter[tup_read]+=1
             else:
                 read_counter[tup_read] = 1
             #if not i%100000:
             #    print i,
         i = 0
-        print str(len(read_counter)) + ' distinct reads'
+        print(str(len(read_counter)) + ' distinct reads')
         for tup in read_counter:
             read = {}
             for k,v in tup:
@@ -275,17 +275,17 @@ def positions_names_states(vcf):
         while a[i][0] == '#':
                 i+=1
         f.close()
-        b = map(lambda x:x.split('\t'),a[i:])
+        b = [x.split('\t') for x in a[i:]]
         positions = {}
         states = {}
         names = {}
         chroms = {}
-        for i in xrange(len(b)):
+        for i in range(len(b)):
                 line = b[i]
                 positions[i] = int(line[1])
                 names[i] = line[2] ##change when fixed files
                 chroms[i] = line[0]
-                state= line[9]
+                #state= line[9]
                 states[i] = 1#sum(s)
         k = 2
         return (states,names,chroms,positions,k)
@@ -294,20 +294,20 @@ def positions_names_states(vcf):
 def make_RNA_data_from_fragmat(gene_data,fragmats,vcf,error,isoforms):
         ##RNA DATA
         read_list = make_readlist_from_fragmat(fragmats)
-        print 'Loading VCF file'
+        print('Loading VCF file')
         S,names,chroms,positions,k = positions_names_states(vcf)
         chrom_set = set(chroms.values())
         n = len(S)
         #print str(n)+ ' SNPs in VCF file'
-        print 'Preparing data for ReadGraph'
+        print('Preparing data for ReadGraph')
         genes = determine_genes_gtf(gene_data,chrom_set)
 
         isodict = None
         filtered_genes = genes
         if not (isoforms == None):
-                print 'Building IsoDict'
+                print('Building IsoDict')
                 isodict = build_isodict(isoforms)
-                print 'Filtering Transcripts'
+                print('Filtering Transcripts')
                 filtered_genes = filter_transcripts(genes,isodict)
 
         RNA_obj = rna_class.RNA_DATA(S,genes,filtered_genes,error,read_list,positions,names,chroms,isodict)
@@ -324,11 +324,11 @@ def make_data_from_fragmat(fragmat,vcf,error,RNA_readlist = []):
         for r in read_list.values():
             r.special_key = r.keys[1]
             r.rates = {0:.5,1:.5}
-        print 'Loading VCF file'
+        print('Loading VCF file')
         S,names,chroms,positions,k = positions_names_states(vcf)
         n = len(S)
-        #print str(n)+ ' SNPs in VCF file'
-        print 'Preparing data for ReadGraph'
+        print(str(n)+ ' SNPs in VCF file')
+        print('Preparing data for ReadGraph')
         D = basic_class.edges_from_readlist(read_list)
         data_obj = basic_class.DATA(D,S,k,error,read_list,positions,names,chroms)
         return data_obj

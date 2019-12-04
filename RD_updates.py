@@ -93,7 +93,7 @@ def update_snps_to_use_chisquare(RD,snps_to_use,chistat):
         new = {}
         for start in snps_to_use:
                 C = [RD.counts[s] for s in snps_to_use[start]]
-                total_counts = map(sum,C)
+                total_counts = list(map(sum,C))
                 val = chisquare(total_counts)
                 if val <= chistat:
                         new[start] = snps_to_use[start]

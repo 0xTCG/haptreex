@@ -14,7 +14,7 @@ def count_genes(jG):
     for m in jG.comp_mins:
         jGdict[m] = G.data.babyRNA.SNP_to_genomic_region[m]
 
-    for v in jGdict.values():
+    for v in list(jGdict.values()):
         jGcounts[v] = []
         Gcounts[v] = []
         

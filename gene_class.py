@@ -69,7 +69,7 @@ class gene(object):
                 return hash(self.name)
                 
         def find_next_SNP(self,b,RD):
-                if not RD.phasable_positions.has_key(self.chrom):
+                if self.chrom not in RD.phasable_positions:
                         return -1
                 else:
                         positions = RD.phasable_positions[self.chrom]
@@ -148,7 +148,7 @@ def build_all_genomic_comps(GG):
         comps_dict = {}
         for start in GG:
             if not GG[start].snps == []:
-                if not comps_dict.has_key(start):
+                if start not in comps_dict:
                     s = build_genomic_comp(GG[start], GG)
                     comps[start] = s
                     m = min(s)
@@ -170,7 +170,7 @@ def assign_reads_to_genomic_regions(genes,reads):
     for R in reads.values():
         regions = set()
         for s in R.keys:
-            if S_G.has_key(s):
+            if s in S_G:
                 regions.add(S_G[s])
             else:
                 regions.add('Not Seen')

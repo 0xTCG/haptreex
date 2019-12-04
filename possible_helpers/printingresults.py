@@ -9,14 +9,14 @@ def what_to_print(RD,X,V):
     for x in X:
         c = RD.nodes[x].chrom
         snps_by_chrom[c].append(len(X[x]))
-        unknowns = V[x][0].values().count('.')
+        unknowns = list(V[x][0].values()).count('.')
         unknows_by_chrom[c].append(unknowns)
         switches = switches_by_comp(x,X,V,RD)[0]
         switches_by_chrom[c].append(switches)
     
-    results.append(sum(map(sum,snps_by_chrom.values())))
-    results.append(sum(map(sum,unkowns_by_chrom.values())))
-    results.append(sum(map(sum,switches_by_chrom.values())))
+    results.append(sum(map(sum,list(snps_by_chrom.values()))))
+    results.append(sum(map(sum,list(unkowns_by_chrom.values()))))
+    results.append(sum(map(sum,list(switches_by_chrom.values()))))
     results.append(snps_by_chrom)
     results.append(unknowns_by_chrom)
     results.append(switches_by_chrom)
@@ -28,10 +28,10 @@ def gene_data_init(RD):
     genes_covered = len(RD.comps)
     results.append(['all genes: ', all_genes])
     results.append(['genes covered: ', genes_covered])
-    genomic_regions = map(len,RD.genomic_region_to_SNPs().values())
+    genomic_regions = list(map(len,list(RD.genomic_region_to_SNPs().values())))
     results.append(['genomic regions: ',len(genomic_regions)])
     results.append(['genomic region sizes: ',sorted(genomic_regions)])
-    results.append(['counted genomic region sizes: ',map(genomic_regions.count,range(1,max(genomic_regions)+1))])
+    results.append(['counted genomic region sizes: ',list(map(genomic_regions.count,list(range(1,max(genomic_regions)+1))))])
     
     results.append(['total snps seen: ',sum(genomic_regions)])
     snp_cov = []
@@ -42,7 +42,7 @@ def gene_data_init(RD):
                 counter += r.count
         snp_cov.append(counter)
     results.append(['coverage of snps: ',sorted(snp_cov)])
-    results.append(['counted coverage: ',map(snp_cov.count,range(1,100))])
+    results.append(['counted coverage: ',list(map(snp_cov.count,list(range(1,100))))])
     results.append(['max coverage: ',max(snp_cov)])
     
 

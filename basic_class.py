@@ -14,7 +14,7 @@ class DATA(object):
                 self.error = error
                 self.read_list = read_list
                 self.k = k
-                self.E = data.keys()
+                self.E = list(data.keys())
 
                 self.nodekeys = sorted(list(self.node_keys()))
                 self.ADJ = self.adj()
@@ -81,21 +81,21 @@ def order(i,j):
         elif i>j:
                 return (j,i)
         else:
-                print 'Error'
+                print('Error')
 
 
 
 class easy_graph(object):
         #ReadGraph object, takes in data object
         def __init__(self,data):
-                print 'Making ReadGraph'
+                print('Making ReadGraph')
                 self.data = data
                 self.error = data.error
                 self.nodes = data.nodes
                 self.edges = data.edges
                 self.nodekeys = self.data.nodekeys
                 self.size = len(self.data.nodekeys)
-                print str(self.size) + ' SNPs in non-trivial connected components'
+                print(str(self.size) + ' SNPs in non-trivial connected components')
                 self.k = self.data.k
                 self.states = self.data.states
 

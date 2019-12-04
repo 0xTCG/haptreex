@@ -56,7 +56,7 @@ class joint_graph(object):
                 for i in range(Ls):
                     temp_neighbors = set()
                     for lil_node in self.short_components[self.short_comp_mins[i]]:
-                        if self.long_components.has_key(lil_node):
+                        if lil_node in self.long_components:
                             temp_neighbors.add(back_long[self.long_comps_dict[lil_node]])
 
                     nodes[i] = mini_node(i,sorted(list(temp_neighbors)))
@@ -64,7 +64,7 @@ class joint_graph(object):
                 for i in range(Ls,Ll+Ls):
                     temp_neighbors = set()
                     for lil_node in self.long_components[self.long_comp_mins[i-Ls]]:
-                        if self.short_components.has_key(lil_node):
+                        if lil_node in self.short_components:
                             temp_neighbors.add(back_short[self.short_comps_dict[lil_node]])
 
                     nodes[i] = mini_node(i,sorted(list(temp_neighbors)))
@@ -113,7 +113,7 @@ class joint_graph(object):
                     m = self.comps_dict[r.keys[0]]
                     comp_reads[m].append(r)
                     for k in r.keys:
-                        if read_dict.has_key(k):
+                        if k in read_dict:
                             read_dict[k].append(r)
                         else:
                             read_dict[k] = [r]
