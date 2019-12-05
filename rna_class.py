@@ -155,8 +155,8 @@ class RNAData:
         s = {k: 0 for r in self.read_list.values() for k in r.keys}
         return list(s.keys())
 
-    def make_position_dict(self):
-        position_to_SNP_index_dict = {chrom: {} for chrom in self.chrom_list}
+    def make_position_dict(self) -> dict[str, ]:
+        position_to_SNP_index_dict = {chrom: dict[int, index]() for chrom in self.chrom_list}
         for s in self.nodekeys:
             S = self.nodes[s]
             c = S.chrom

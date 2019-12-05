@@ -1,16 +1,20 @@
 from basic_class import Graph, build_all_comps, mins_of_comps
 from read_class import Read
 from rna_class import RNAData
-from typing import dict, list, tuple
 
 class JointGraph:
-    def __init__(self, RD: RNAData, G: Graph) -> None:
+    RD: RNAData
+    G: Graph
+    k: int
+    short_comp_mins: ...
+
+    def __init__(self, RD: RNAData, G: Graph):
         self.RD = RD
         self.G = G
-        self.read_list = RD.all_reads
+        # self.read_list = RD.all_reads
         self.k = 2
-        self.error = G.error
-        self.short_components = RD.components  # components induced by genes  / DASE
+        # self.error = G.error
+        # self.short_components = RD.components  # components induced by genes  / DASE
         self.short_comp_mins = sorted(RD.comp_mins)
         temp_D = {}
         for x in self.short_comp_mins:
