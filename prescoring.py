@@ -1,6 +1,6 @@
 import random
 
-from typing import Dict, List, Tuple
+from typing import dict, list, tuple
 
 
 class baby_graph(object):
@@ -50,7 +50,7 @@ class baby_graph(object):
 
 def make_golden_from_true2(
     filename: str,
-) -> Tuple[Dict[int, Dict[int, str]], List[str], List[str]]:
+) -> tuple[dict[int, dict[int, str]], list[str], list[str]]:
     f = open(filename, "r")
     a = f.readlines()
     f.close()

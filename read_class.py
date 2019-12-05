@@ -4,12 +4,12 @@ import math
 
 ##from helpers import *
 
-from typing import Dict, List
+from typing import dict, list
 
 
-class READ(object):
+class Read(object):
     ## for normal reads, the read_dict doesnt include starts of reads
-    def __init__(self, read: Dict[int, int], count: int, read_num: int) -> None:
+    def __init__(self, read: dict[int, int], count: int, read_num: int) -> None:
         self.read = read
         self.count = count
         self.keys = sorted(self.read.keys())
@@ -27,7 +27,7 @@ class READ(object):
     def __len__(self):
         return len(self.read)
 
-    def make_mini_reads(self) -> Dict[int, Dict[int, int]]:
+    def make_mini_reads(self) -> dict[int, dict[int, int]]:
         mini_read_dict = {}
         mini_read = copy.copy(self.read)
         for key in reversed(sorted(self.keys)):
@@ -37,13 +37,13 @@ class READ(object):
         return mini_read_dict
 
 
-def sample_from_reads(reads: List[READ]) -> List[READ]:
+def sample_from_reads(reads: list[Read]) -> list[Read]:
     new_reads = []
     for read in reads:
         if read.size > 0:
             new_reads.append(read)
         else:
             choice = random.choice(read.keys)
-            new_read = READ({choice: read.read[choice]}, read.read_num)
+            new_read = Read({choice: read.read[choice]}, read.read_num)
             new_reads.append(new_read)
     return new_reads

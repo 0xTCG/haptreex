@@ -1,50 +1,64 @@
-import probs
-import sys
-import copy
-import math
-import random
+from math import log
+from probs import read_val_tail
+from read_class import Read
 
-from read_class import READ
-from typing import Dict, List, Optional, Tuple, Union
 
-# def branch(m: int,m_prev: Optional[int],LISTS: Union[List[Dict[int, Dict[int, int]]], List[Dict[int, DUMMY_NAME]]],DICT: Dict[int, Union[int, float]],threshold: float,p: float,error: float,read_dict: Dict[int, List[READ]]) -> Tuple[List[Dict[int, Dict[int, int]]], Dict[int, float]]:
+def add_column_dict(
+    m: int, l: dict[int, dict[int, int]], column: tuple[int, int]
+) -> dict[int, dict[int, int]]:
+    # adds column to solution l
+    new = { 0: {key: l[0][key] for key in l[0]},
+            1: {key: l[1][key] for key in l[1]} }
+    for i in range(len(column)):
+        new[i][m] = column[i]
+    return new
+
+
+def temp_add_column_dict(
+    m: int, l: dict[int, dict[int, int]], column: tuple[int, int]
+) -> dict[int, dict[int, int]]:
+    # adds column to solution l (on exisiting solution)
+    new = l
+    for i in range(len(column)):
+        new[i][m] = column[i]
+    return new
+
+
+# def branch(m: int,m_prev: Optional[int],LISTS: Union[list[dict[int, dict[int, int]]], list[dict[int, DUMMY_NAME]]],DICT: dict[int, Union[int, float]],threshold: float,p: float,error: float,read_dict: dict[int, list[Read]]) -> tuple[list[dict[int, dict[int, int]]], dict[int, float]]:
 def branch(
     m: int,
-    m_prev: Optional[int],
-    LISTS: List[Dict[int, Dict[int, int]]],
-    DICT: Dict[int, Union[int, float]],
+    m_prev: int,
+    lists: list[dict[int, dict[int, int]]],
+    table: dict[int, Union[int, float]],
     threshold: float,
     p: float,
     error: float,
-    read_dict: Dict[int, List[READ]],
-) -> Tuple[List[Dict[int, Dict[int, int]]], Dict[int, float]]:
+    read_dict: dict[int, list[Read]],
+) -> tuple[list[dict[int, dict[int, int]]], dict[int, float]]:
     # k=2 only
     # branch all solutions to highly probable solutions on one additional SNP
     # lists include all current solutions
     # dict has list index of solutions and their likelihhods
     columns = [(0, 1), (1, 0)]
-    new_LISTS = []
-    new_DICT = {}
-    count_list_index = 0  # counter for length of new_LISTS
-    for i in range(len(LISTS)):
-        partial_phase = LISTS[i]
+    new_lists = list[dict[int, dict[int, int]]]()
+    new_table = dict[int, float]()
+    count_list_index = 0  # counter for length of new_lists
+    for i in range(len(lists)):
+        partial_phase = lists[i]
         # extend solution
         costs = {c: 0 for c in columns}
         corrections = {c: 0 for c in columns}
 
         for c in columns:
-            # adding possible orderings of alleles for new SNP
-            # for diploid
+            # adding possible orderings of alleles for new SNP for diploid
             extended_partial_phase = temp_add_column_dict(m, partial_phase, c)
-            costs[c] = probs.read_val_tail(
-                partial_phase, p, error, read_dict, m, m_prev
-            )
+            costs[c] = read_val_tail(partial_phase, p, error, read_dict, m, m_prev)
 
         max_cost = max(costs.values())
         new_costs = {key: costs[key] - max_cost for key in list(costs.keys())}
         used = False
         for c in costs.keys():
-            if new_costs[c] >= math.log(threshold / float(1 - threshold)):
+            if new_costs[c] >= log(threshold / (1 - threshold)):
                 # adds extension with allele ordering c if sufficiently likely
                 if used:  # can use the old dict once
                     likely_extended_partial_phase = add_column_dict(m, partial_phase, c)
@@ -55,27 +69,26 @@ def branch(
                     used = True
                 # adds new solution to the dict with its new likelihood
                 # all the entries are positive instead of negative
-                new_DICT[count_list_index] = DICT[i] - costs[c]
+                new_table[count_list_index] = table[i] - costs[c]
                 count_list_index += 1
-                new_LISTS.append(likely_extended_partial_phase)
-    return new_LISTS, new_DICT
+                new_lists.append(likely_extended_partial_phase)
+    return new_lists, new_table
 
 
 def prune(
     m: int,
-    LISTS: List[Dict[int, Dict[int, int]]],
-    DICT: Dict[int, float],
-    components: Dict[int, List[int]],
-) -> Tuple[List[Dict[int, Dict[int, int]]], Dict[int, float]]:
+    lists: list[dict[int, dict[int, int]]],
+    table: dict[int, float],
+    components: dict[int, list[int]],
+) -> tuple[list[dict[int, dict[int, int]]], dict[int, float]]:
     # prune solutions based on number of solutions and thresholds
-    global counter2
     n = max(components[m])
-    L = len(LISTS)
+    L = len(lists)
     count_list_index = 0
-    new_lists = []
-    new_dict = {}
+    new_lists = list[dict[int, dict[int, int]]]()
+    new_dict = dict[int, float]()
     go = False
-
+    threshold = 1.0
     if m == n:
         threshold = 1
         go = True
@@ -88,13 +101,13 @@ def prune(
     else:
         threshold = 0.001
 
-    threshold = abs(math.log(threshold))
-    min_val = min(DICT.values())
-    for i in range(len(LISTS)):
-        l = LISTS[i]
-        if abs(DICT[i] - min_val) < threshold + 0.0001:
+    threshold = abs(log(threshold))
+    min_val = min(table.values())
+    for i in range(len(lists)):
+        l = lists[i]
+        if abs(table[i] - min_val) < threshold + 0.0001:
             new_lists.append(l)
-            new_dict[count_list_index] = DICT[i]
+            new_dict[count_list_index] = table[i]
             count_list_index += 1
     if go:
         # output any of the most likely solutions
@@ -113,85 +126,37 @@ def RNA_solution(
     threshold: float,
     p: float,
     error: float,
-    read_dict: Dict[int, List[READ]],
-    components: Dict[int, List[int]],
-) -> List[Dict[int, Dict[int, int]]]:
+    read_dict: dict[int, list[Read]],
+    components: dict[int, list[int]],
+) -> list[dict[int, dict[int, int]]]:
     # find phasing solution for connected component starting at start
-    init = {0: {}, 1: {}}
-    LISTS = [init]
-    DICT = {0: 0}
+    init = {0: dict[int, int](), 1: dict[int, int]()}
+    lists = [init]
+    table = {0: 0}
     skipped = True  # set to True to allow allele permutations
-    m_prev = None
+    m_prev = -1 # SEQ/TODO: check! originally  None
     for m in components[start]:
         if skipped:
-            LISTS, DICT = branch(m, m_prev, LISTS, DICT, threshold, p, error, read_dict)
-            LISTS, DICT = prune(m, LISTS, DICT, components)
+            lists, table = branch(m, m_prev, lists, table, threshold, p, error, read_dict)
+            lists, table = prune(m, lists, table, components)
         else:  # specify beginning to remove allele permutations
             init = {0: {m: 0}, 1: {m: 1}}
-            LISTS = [init]
-            DICT = {0: 0}
+            lists = [init]
+            table = {0: 0}
             skipped = True
         m_prev = m
-    return LISTS
+    return lists
 
 
 def RNA_phase(
     threshold: float,
     p: float,
     error: float,
-    read_dict: Dict[int, List[READ]],
-    comp_mins: List[int],
-    components: Dict[int, List[int]],
-) -> Dict[int, Dict[int, Dict[int, int]]]:
-    phases = {}
-    for start in comp_mins:
-        phases[start] = RNA_solution(start, threshold, p, error, read_dict, components)[
-            0
-        ]
+    read_dict: dict[int, list[Read]],
+    comp_mins: list[int],
+    components: dict[int, list[int]],
+):
+    phases = dict[int, dict[int, dict[int, int]]]()
+    for s in comp_mins:
+        phases[s] = RNA_solution(start, threshold, p, error, read_dict, components)[0]
     return phases
-
-
-###################################################
-###### helper functions
-
-
-def mycopy(phase: Dict[int, Dict[int, int]]) -> Dict[int, Dict[int, int]]:
-    # provides a deep copy of a gene/phase
-    return {
-        0: {key: phase[0][key] for key in phase[0]},
-        1: {key: phase[1][key] for key in phase[1]},
-    }
-
-
-def tup_of_dict(genes):
-    # formats dictionary as a tuple so it can be used as a key
-    s1 = genes[0]
-    s2 = genes[1]
-    keys = sorted(s1.keys())
-    S1 = []
-    S2 = []
-    for key in keys:
-        S1.append(s1[key])
-        S2.append(s2[key])
-    return (tuple(S1), tuple(S2))
-
-
-def add_column_dict(
-    m: int, l: Dict[int, Dict[int, int]], column: Tuple[int, int]
-) -> Dict[int, Dict[int, int]]:
-    # adds column to solution l
-    new = mycopy(l)
-    for i in range(len(column)):
-        new[i][m] = column[i]
-    return new
-
-
-# def temp_add_column_dict(m: int,l: Dict[int, Union[Dict[int, int], DUMMY_NAME]],column: Tuple[int, int]) -> Dict[int, Dict[int, int]]:
-def temp_add_column_dict(
-    m: int, l: Dict[int, Dict[int, int]], column: Tuple[int, int]
-) -> Dict[int, Dict[int, int]]:
-    # adds column to solution l (on exisiting solution)
-    new = l
-    for i in range(len(column)):
-        new[i][m] = column[i]
-    return new

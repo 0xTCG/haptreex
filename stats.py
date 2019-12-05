@@ -8,7 +8,7 @@ import copy
 
 from monkeytype.encoding import DUMMY_NAME
 from rna_class import RNA_DATA
-from typing import Any, Dict, List, Tuple
+from typing import Any, dict, list, tuple
 
 
 def stats(
@@ -124,7 +124,7 @@ def stats(
                 #                print global_vars.V[0][y],
 
 
-def num_SNP(STU: Dict[int, List[int]]) -> int:
+def num_SNP(STU: dict[int, list[int]]) -> int:
     return sum(map(len, list(STU.values())))
 
 
@@ -153,8 +153,8 @@ def comp_phase_print(RD, snps_to_use):
 
 
 def con_dis_non(
-    X: Dict[int, Dict[int, Dict[int, int]]], V: Dict[int, Dict[int, str]]
-) -> Tuple[Dict[int, DUMMY_NAME], List[int]]:
+    X: dict[int, dict[int, dict[int, int]]], V: dict[int, dict[int, str]]
+) -> tuple[dict[int, DUMMY_NAME], list[int]]:
     counts = {}  # {x:{} for x in X}
     for x in X:
         countsx = {0: 0, "n": 0, 1: 0}
@@ -188,10 +188,10 @@ def m_swcounter2(sol, gold, G):
 
 def switches_in_comp2(
     start: int,
-    sol: Dict[int, Dict[int, Dict[int, int]]],
-    gold: Dict[int, Dict[int, str]],
+    sol: dict[int, dict[int, dict[int, int]]],
+    gold: dict[int, dict[int, str]],
     G: RNA_DATA,
-) -> Tuple[int, List[Any]]:
+) -> tuple[int, list[Any]]:
     m0, switches0 = switches_comp_strand2(start, 0, sol, gold, G)
     m1, switches1 = switches_comp_strand2(start, 1, sol, gold, G)
     if m0 < m1:
@@ -203,10 +203,10 @@ def switches_in_comp2(
 def switches_comp_strand2(
     start: int,
     strand: int,
-    sol: Dict[int, Dict[int, Dict[int, int]]],
-    gold: Dict[int, Dict[int, str]],
+    sol: dict[int, dict[int, dict[int, int]]],
+    gold: dict[int, dict[int, str]],
     G: RNA_DATA,
-) -> Tuple[int, List[Any]]:
+) -> tuple[int, list[Any]]:
     m = 0
     switches = []
     for i in G.components[start]:

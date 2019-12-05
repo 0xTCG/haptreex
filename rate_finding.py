@@ -1,11 +1,11 @@
 import read_class
 import math
 
-from read_class import READ
-from typing import Callable, Dict, List, Tuple, Union
+from read_class import Read
+from typing import Callable, dict, list, tuple, Union
 
 
-def find_rates(snps: List[int], reads: List[READ], rate: float) -> Dict[int, float]:
+def find_rates(snps: list[int], reads: list[Read], rate: float) -> dict[int, float]:
     ##if sufficient coverage, approximation works well
     ##snps must be sorted
     lb_for_approx = 200
@@ -22,7 +22,7 @@ def find_rates(snps: List[int], reads: List[READ], rate: float) -> Dict[int, flo
     return {0: r, 1: 1 - r}  ##had swapped
 
 
-def approx_rate(counts: List[List[int]]) -> float:
+def approx_rate(counts: list[list[int]]) -> float:
     l = len(counts)
     maxes = map(max, counts)
     sums = map(sum, counts)
@@ -32,8 +32,8 @@ def approx_rate(counts: List[List[int]]) -> float:
 
 
 def get_counts(
-    snps: List[int], reads: List[READ], shuffle: bool = True
-) -> Dict[int, List[int]]:
+    snps: list[int], reads: list[Read], shuffle: bool = True
+) -> dict[int, list[int]]:
     if shuffle:
         reads = read_class.sample_from_reads(reads)
     counts = {i: [0, 0] for i in range(len(snps))}
@@ -58,7 +58,7 @@ def rd(f, x, dx):
     return f(x) - f(x - dx)
 
 
-def NW(vec: Dict[int, List[int]], rate: float) -> float:
+def NW(vec: dict[int, list[int]], rate: float) -> float:
     left = 0.001
     right = 1 - left
     dx = 0.001
@@ -100,9 +100,9 @@ def trans(s1: int, s2: int, rate: float) -> float:
 
 
 def forward(
-    FD: Dict[Tuple[int, int], Union[float, int]],
+    FD: dict[tuple[int, int], Union[float, int]],
     X: int,
-    vec: Dict[int, List[int]],
+    vec: dict[int, list[int]],
     i: int,
     rate: float,
     p: float,

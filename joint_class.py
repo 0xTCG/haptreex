@@ -1,9 +1,9 @@
 import basic_class
 
 from basic_class import easy_graph
-from read_class import READ
+from read_class import Read
 from rna_class import RNA_DATA
-from typing import Dict, List, Tuple
+from typing import dict, list, tuple
 
 
 class joint_graph(object):
@@ -38,7 +38,7 @@ class joint_graph(object):
         self.comp_mins = basic_class.mins_of_comps(self.components)
         self.read_dict, self.comp_reads = self.make_read_dict()
 
-    def organize_nodes(self) -> Dict[int, mini_node]:
+    def organize_nodes(self) -> dict[int, mini_node]:
         nodes = {}
         Ls = len(self.short_comp_mins)
         self.Ls = Ls
@@ -83,7 +83,7 @@ class joint_graph(object):
 
     def translate_components(
         self,
-    ) -> Tuple[Dict[int, List[int]], List[int], Dict[int, int]]:
+    ) -> tuple[dict[int, list[int]], list[int], dict[int, int]]:
         comp_mins = []
         components = {}
         comps_dict = {}
@@ -106,7 +106,7 @@ class joint_graph(object):
 
         return components, sorted(comp_mins), comps_dict
 
-    def make_read_dict(self) -> Tuple[Dict[int, List[READ]], Dict[int, List[READ]]]:
+    def make_read_dict(self) -> tuple[dict[int, list[Read]], dict[int, list[Read]]]:
         # This does not work correctly if G is not the 2-reads from RNA-seq data.
         read_dict = {}
         for s in self.RD.components:
@@ -127,6 +127,6 @@ class joint_graph(object):
 
 
 class mini_node(object):
-    def __init__(self, index: int, neighbors: List[int]) -> None:
+    def __init__(self, index: int, neighbors: list[int]) -> None:
         self.index = index
         self.neighbors = neighbors

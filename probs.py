@@ -1,17 +1,17 @@
-import global_vars
-import math
+# [Seq] DONE
 
-from read_class import READ
-from typing import Dict, List, Optional
+from math import log
+from global_vars import CONFIDENCE
+from read_class import Read
 
 
 def read_val_tail(
-    partial_phase: Dict[int, Dict[int, int]],
+    partial_phase: dict[int, dict[int, int]],
     p: float,
     error: float,
-    read_dict: Dict[int, List[READ]],
+    read_dict: dict[int, list[Read]],
     m: int,
-    m_prev: Optional[int],
+    m_prev: int,
 ) -> float:
     ## we extend a phasing and then calculating how likely that extension is
     ## this looks at the prob of a particular phasing generating the set of reads which cover "end"
@@ -30,9 +30,7 @@ def read_val_tail(
         probs2 = 0
         for strand in range(k):
             pp = partial_phase[strand]
-            prob = (global_vars.confidence * read_obj.rates[strand]) + (
-                0.5 * (1 - global_vars.confidence)
-            )
+            prob = (CONFIDENCE * read_obj.rates[strand]) + (0.5 * (1 - CONFIDENCE))
             mini_read = read_obj.mini_reads[end]
             for key in mini_read:
                 if mini_read[key] == pp[key]:
@@ -46,7 +44,6 @@ def read_val_tail(
             probs += prob
         probs = probs
         if probs == 0:
-            # print("some stuff went to 0")
             val = -float("inf")
         else:
             val += math.log(probs) * read_obj.count

@@ -6,6 +6,11 @@ import rate_finding
 import time
 
 
+def in_range(S: Node, r: tuple[int, int]) -> tuple[bool, bool]:
+    p = S.position
+    return (p >= r[0], p < r[1])
+
+
 class RNA_DATA(object):
     def __init__(
         self,
@@ -55,7 +60,7 @@ class RNA_DATA(object):
         chrom_list = {}
         for num in range(len(self.nodekeys)):
             index = self.nodekeys[num]
-            d[index] = basic_class.node(
+            d[index] = basic_class.Node(
                 self.k,
                 index,
                 0,
@@ -299,7 +304,7 @@ class RNA_DATA(object):
                         read_dicts[k] = [r]
                 else:
                     for k in r.keys:
-                        new_read = read_class.READ({k: r.read[k]}, r.count, -1)
+                        new_read = read_class.Read({k: r.read[k]}, r.count, -1)
                         if k in read_dicts:
                             read_dicts[k].append(new_read)
                         else:

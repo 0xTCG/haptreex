@@ -2,12 +2,12 @@ import math
 
 
 from rna_class import RNA_DATA
-from typing import Dict, List
+from typing import dict, list
 
 
 def update_snps_to_use_size_cluster(
-    RD: RNA_DATA, snps_to_use: Dict[int, List[int]], size_factor: int
-) -> Dict[int, List[int]]:
+    RD: RNA_DATA, snps_to_use: dict[int, list[int]], size_factor: int
+) -> dict[int, list[int]]:
     new = {}
     for start in snps_to_use:
         clusters0 = clusters_size(snps_to_use[start], RD.counts, size_factor)
@@ -17,8 +17,8 @@ def update_snps_to_use_size_cluster(
 
 
 def update_snps_to_use_rate_cluster(
-    RD: RNA_DATA, snps_to_use: Dict[int, List[int]], rate_factor: float
-) -> Dict[int, List[int]]:
+    RD: RNA_DATA, snps_to_use: dict[int, list[int]], rate_factor: float
+) -> dict[int, list[int]]:
     new = {}
     for start in snps_to_use:
         clusters0 = clusters_rate(snps_to_use[start], RD.counts, rate_factor)
@@ -29,8 +29,8 @@ def update_snps_to_use_rate_cluster(
 
 
 def update_snps_to_use_rate(
-    RD: RNA_DATA, snps_to_use: Dict[int, List[int]], rate_cutoff: float
-) -> Dict[int, List[int]]:
+    RD: RNA_DATA, snps_to_use: dict[int, list[int]], rate_cutoff: float
+) -> dict[int, list[int]]:
     new = {}
     high_confidence_starts = []
     for start in snps_to_use:
@@ -43,8 +43,8 @@ def update_snps_to_use_rate(
 
 
 def update_snps_to_use_coverage(
-    RD: RNA_DATA, snps_to_use: Dict[int, List[int]], coverage_cutoff: int
-) -> Dict[int, List[int]]:
+    RD: RNA_DATA, snps_to_use: dict[int, list[int]], coverage_cutoff: int
+) -> dict[int, list[int]]:
     new = {}
     for start in snps_to_use:
         covered_snps = []
@@ -58,8 +58,8 @@ def update_snps_to_use_coverage(
 
 
 def update_snps_to_use_cutoff(
-    RD: RNA_DATA, snps_to_use: Dict[int, List[int]], cutoff: float
-) -> Dict[int, List[int]]:
+    RD: RNA_DATA, snps_to_use: dict[int, list[int]], cutoff: float
+) -> dict[int, list[int]]:
     new = {}
     for start in snps_to_use:
         confident_snps = []
@@ -72,25 +72,13 @@ def update_snps_to_use_cutoff(
 
 
 def update_snps_to_use_rate_dependent_cutoff(
-    RD: RNA_DATA, snps_to_use: Dict[int, List[int]], cutoff: int, conf: float
-) -> Dict[int, List[int]]:
+    RD: RNA_DATA, snps_to_use: dict[int, list[int]], cutoff: int, conf: float
+) -> dict[int, list[int]]:
     new = {}
     for start in snps_to_use:
         confident_snps = []
         for snp in snps_to_use[start]:
             if new_score(RD.counts[snp], RD.rates[snp], conf) > cutoff:
-                confident_snps.append(snp)
-        if len(confident_snps) > 1:
-            new[min(confident_snps)] = sorted(confident_snps)
-    return new
-
-
-def update_snps_to_use_rate_dependent_cutoff_tail(RD, snps_to_use, cutoff):
-    new = {}
-    for start in snps_to_use:
-        confident_snps = []
-        for snp in snps_to_use[start]:
-            if rate_tail_score(RD.counts[snp], RD.rates[snp]) > cutoff:
                 confident_snps.append(snp)
         if len(confident_snps) > 1:
             new[min(confident_snps)] = sorted(confident_snps)
@@ -121,8 +109,8 @@ def update_snps_to_use_chisquare(RD, snps_to_use, chistat):
 
 
 def clusters_size(
-    snps: List[int], counts: Dict[int, List[int]], sum_factor: int
-) -> List[List[int]]:
+    snps: list[int], counts: dict[int, list[int]], sum_factor: int
+) -> list[list[int]]:
     tmp_dict = {}
     for s in snps:
         tmp_dict[s] = sum(counts[s])
@@ -143,8 +131,8 @@ def clusters_size(
 
 
 def clusters_rate(
-    snps: List[int], counts: Dict[int, List[int]], rate_factor: float
-) -> List[List[int]]:
+    snps: list[int], counts: dict[int, list[int]], rate_factor: float
+) -> list[list[int]]:
     tmp_dict = {}
     for s in snps:
         tmp_dict[s] = max(counts[s]) / float(sum(counts[s])) - 0.5
@@ -164,7 +152,7 @@ def clusters_rate(
     return clusters
 
 
-def new_score(pair: List[int], rates: Dict[int, float], conf: float) -> float:
+def new_score(pair: list[int], rates: dict[int, float], conf: float) -> float:
     r = min(rates.values())
     r = max(r, 0.05)
     r = conf * r + 0.5 * (1 - conf)

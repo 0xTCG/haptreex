@@ -1,6 +1,6 @@
 import subprocess
 
-from typing import Dict, List
+from typing import dict, list
 
 
 def make_solution(X, G, outputname, name):
@@ -95,11 +95,11 @@ def make_solution_RNA(X, RD, outputname, name):
 
 
 def make_solution_simple(
-    X: Dict[int, Dict[int, Dict[int, int]]],
+    X: dict[int, dict[int, dict[int, int]]],
     outputname: str,
     name: str,
-    vChroms: List[str],
-    vPositions: List[str],
+    vChroms: list[str],
+    vPositions: list[str],
 ) -> None:
     # writes phasing solution to outputname
     t = "\t"

@@ -1,85 +1,32 @@
-import gene_class
-import read_class
-import rna_class
-import basic_class
-import global_vars
-import time
-import string
-import re
+from gene_class import Gene
+from read_class import Read
+from rna_class import RNAData
+from basic_class import Data, edges_from_readlist
+from global_vars import QUALITY_CUTOFF
+
 
 ###########################################################################
 # GENES
-from gene_class import gene
-from read_class import READ
-from rna_class import RNA_DATA
-from typing import Any, Dict, List, Set, Tuple
 
-
-def determine_genes(gene_data, chroms):
-    print("Loading and formatting genes")
+def determine_genes_gtf(gene_data: str, chroms: set[str]) -> dict[int, Gene]:
+    print "Loading and formatting genes"
     f = open(gene_data, "r")
     a = list(f.readlines())
     f.close()
-    genes = {}
-    c = 0
-    for x in a:
-        y = x.split("\t")
-        # to only include genes in chroms from VCF
-        if y[0] in chroms:
-            starts = map(int, y[11].split(",")[:-1])
-            starts = [
-                i + int(y[1]) + 1 for i in starts
-            ]  # Convert 0-based start positions relative to gene to 1-based genomic positions
-            lengths = list(map(int, y[10].split(",")[:-1]))
-            g = gene_class.gene(
-                y[3],
-                y[0],
-                int(y[1]) + 1,
-                int(y[2]),
-                y[5],
-                int(y[9]),
-                lengths,
-                starts,
-                "",
-                "",
-            )
-            genes[c] = g
-            g.index = c
-            c += 1
-    return genes
-
-
-def determine_genes_gtf(gene_data: str, chroms: Set[str]) -> Dict[int, gene]:
-    print("Loading and formatting genes")
-    f = open(gene_data, "r")
-    a = list(f.readlines())
-    # print 'done reading lines'
-    f.close()
-    genes = {}
     i = 0
     while a[i][0] == "#":
         i += 1
-    # print 'found i'
     c = a[i:]
-    # print 'c defined'
-    t = time.time()
-    b = {}
+    b = dict[int, list[str]]()
     for j in range(len(a[i:])):
-        b[j] = tuple(c[j][:-2].split("\t"))
-    # print 'done splitting'
-    # print time.time() - t
-    # print len(b)
-    trans_list = []
-    trans_dict = {}
+        b[j] = c[j][:-2].split("\t")
+    trans_list = list[int]()
+    trans_dict = dict[int, dict[str, list[int]]]()
     for j in range(len(b)):
         y = b[j]
         if y[2] == "transcript":
             trans_list.append(j)
-            trans_dict[j] = {"exon_starts": [], "exon_lengths": [], "exon_count": 0}
-
-    # print len(trans_list)
-    # print trans_list[:10]
-
+            trans_dict[j] = {"exon_starts": [], "exon_lengths": []}
     for k in range(len(trans_list) - 1):
         start = trans_list[k]
         end = trans_list[k + 1]
@@ -91,11 +38,9 @@ def determine_genes_gtf(gene_data: str, chroms: Set[str]) -> Dict[int, gene]:
                 exon_length = exon_end - exon_start + 1
                 trans_dict[start]["exon_starts"].append(exon_start)
                 trans_dict[start]["exon_lengths"].append(exon_length)
-                trans_dict[start]["exon_count"] += 1
 
     start = trans_list[-1]
     end = len(b)
-
     for j in range(start, end):
         y = b[j]
         if y[2] == "exon":
@@ -104,9 +49,8 @@ def determine_genes_gtf(gene_data: str, chroms: Set[str]) -> Dict[int, gene]:
             exon_length = exon_end - exon_start + 1
             trans_dict[start]["exon_starts"].append(exon_start)
             trans_dict[start]["exon_lengths"].append(exon_length)
-            trans_dict[start]["exon_count"] += 1
 
-    transcripts = {}
+    transcripts = dict[int, Gene]()
     for j in trans_dict:
         y = b[j]
         chrom = y[0]
@@ -121,9 +65,9 @@ def determine_genes_gtf(gene_data: str, chroms: Set[str]) -> Dict[int, gene]:
             transcript_id = v[1][1][1:-1]
             gene_type = v[2][1][1:-1]
             exon_starts = trans_dict[j]["exon_starts"]
-            exon_count = trans_dict[j]["exon_count"]
+            exon_count = len(trans_dict[j]["exon_lengths"])
             exon_lengths = trans_dict[j]["exon_lengths"]
-            transcripts[j] = gene_class.gene(
+            transcripts[j] = Gene(
                 transcript_id,
                 chrom,
                 bp_start,
@@ -140,8 +84,8 @@ def determine_genes_gtf(gene_data: str, chroms: Set[str]) -> Dict[int, gene]:
     return transcripts
 
 
-def build_isodict(isoforms):
-    isodict = {}
+def build_isodict(isoforms: str) -> dict[str, list[float, str]]:
+    isodict = dict[str, list[float, str]]()
     f = open(isoforms)
     temp = [x.split("\t") for x in f.readlines()]
     for i in range(1, len(temp)):
@@ -149,16 +93,15 @@ def build_isodict(isoforms):
     return isodict
 
 
-def filter_transcripts(genes, isodict):
-    gene_cov = {}
+def filter_transcripts(genes, isodict: dict[str, list[float, str]]) -> dict[int, Gene]:
+    gene_cov = dict[str, int]()
     for i in isodict:
         gene_cov[isodict[i][1]] = 0
     for i in isodict:
         gene_cov[isodict[i][1]] += isodict[i][0]
 
-    # print len(genes)
-    new_genes = {}
-    types = set()
+    new_genes = dict[int, Gene]()
+    types = set[str]()
     for j in genes:
         g = genes[j]
         tid = g.transcript_id
@@ -168,10 +111,6 @@ def filter_transcripts(genes, isodict):
             if val > 0:
                 if val / gene_cov[isodict[tid][1]] > 0.01:
                     new_genes[j] = g
-    # print len(types)
-    # if len(types) <100:
-    #        print set(types)
-    # print len(new_genes)
     return new_genes
 
 
@@ -179,20 +118,19 @@ def filter_transcripts(genes, isodict):
 # READS
 
 
-def make_read_of_frag(frag0: str) -> Any:
+def make_read_of_frag(frag0: str) -> tuple[list[tuple[int, int]], int]:
     frag = frag0.split(" ")[2:]
     # takes line from fragment matrix and makes tuple formatted read
-    read = ()
+    read = list[tuple[int, int]]()
     qual = frag[-1][0]
     frag = frag[:-1]
     if len(frag) % 2 == 1:
-        print("fragment file error")
-        print(frag)
+        raise ValueError(f"fragment file error: {frag}")
 
     for i in range(0, len(frag), 2):
         key = int(frag[i])
         for char in frag[i + 1]:
-            read = read + ((key - 1, int(char)),)
+            read.append((key - 1, int(char)))
             key += 1
     if len(read) == 1:
         qual = ord(qual)
@@ -201,10 +139,13 @@ def make_read_of_frag(frag0: str) -> Any:
     return read, qual
 
 
-def make_readlist_from_fragmat(fragmats: List[str]) -> Dict[int, READ]:
+def make_readlist_from_fragmat(
+    fragmats: list[str],
+    skip_single: bool = False
+) -> dict[int, Read]:
     # translates fragment matrix into a list of reads
-    print("Loading and formatting fragments")
-    a = []
+    print "Loading and formatting fragments"
+    a = list[str]()
     for fragmat in fragmats:
         f = open(fragmat, "r")
         A = list(f.readlines())
@@ -212,20 +153,18 @@ def make_readlist_from_fragmat(fragmats: List[str]) -> Dict[int, READ]:
         a = a + A
 
     F = len(a)
-    # print str(F)+' fragments'
-    read_list_list = []
+    read_list_list = list[list[tuple[int, int]]]()
     i = 0
     for r in a:
         i += 1
         read, qual = make_read_of_frag(r)
-        if qual >= global_vars.quality_cutoff:
-            read_list_list.append(read)
-        # if not i%1000000:
-        #        print i,
+        if qual >= QUALITY_CUTOFF:
+            if not skip_single or len(read) > 1:
+                read_list_list.append(read)
 
-    print(str(len(read_list_list)) + " reads of sufficient quality")
-    read_list = {}
-    read_counter = {}
+    print f"{len(read_list_list)} reads of sufficient quality"
+    read_list = dict[int, Read]()
+    read_counter = dict[list[tuple[int, int]], int]()
     i = 0
     for tup_read in read_list_list:
         i += 1
@@ -233,66 +172,13 @@ def make_readlist_from_fragmat(fragmats: List[str]) -> Dict[int, READ]:
             read_counter[tup_read] += 1
         else:
             read_counter[tup_read] = 1
-        # if not i%100000:
-        #    print i,
     i = 0
-    print(str(len(read_counter)) + " distinct reads")
+    print f"{len(read_counter)} distinct reads"
     for tup in read_counter:
-        read = {}
+        read = dict[list[tuple[int, int]], int]()
         for k, v in tup:
             read[k] = v
-        read_list[i] = read_class.READ(read, read_counter[tup], i)
-        # if not i%100000:
-        #        print i
-
-        i += 1
-    return read_list
-
-
-def make_readlist_from_fragmat_skip_1_reads(fragmats):
-    # translates fragment matrix into a list of reads
-    print("Loading and formatting fragments")
-    a = []
-    for fragmat in fragmats:
-        f = open(fragmat, "r")
-        A = list(f.readlines())
-        f.close()
-        a = a + A
-
-    F = len(a)
-    # print str(F)+' fragments'
-    read_list_list = []
-    i = 0
-    for r in a:
-        i += 1
-        read, qual = make_read_of_frag(r)
-        if qual >= global_vars.quality_cutoff and len(read) > 1:
-            read_list_list.append(read)
-        # if not i%1000000:
-        #        print i,
-
-    print(str(len(read_list_list)) + " reads of sufficient quality")
-    read_list = {}
-    read_counter = {}
-    i = 0
-    for tup_read in read_list_list:
-        i += 1
-        if tup_read in read_counter:
-            read_counter[tup_read] += 1
-        else:
-            read_counter[tup_read] = 1
-        # if not i%100000:
-        #    print i,
-    i = 0
-    print(str(len(read_counter)) + " distinct reads")
-    for tup in read_counter:
-        read = {}
-        for k, v in tup:
-            read[k] = v
-        read_list[i] = read_class.READ(read, read_counter[tup], i)
-        # if not i%100000:
-        #        print i
-
+        read_list[i] = Read(read, read_counter[tup], i)
         i += 1
     return read_list
 
@@ -303,7 +189,7 @@ def make_readlist_from_fragmat_skip_1_reads(fragmats):
 
 def positions_names_states(
     vcf: str,
-) -> Tuple[Dict[int, int], Dict[int, str], Dict[int, str], Dict[int, int], int]:
+) -> tuple[dict[int, int], dict[int, str], dict[int, str], dict[int, int], int]:
     # reading data from VCF file and formatting as lists
     f = open(vcf, "r")
     a = f.readlines()
@@ -312,27 +198,30 @@ def positions_names_states(
         i += 1
     f.close()
     b = [x.split("\t") for x in a[i:]]
-    positions = {}
-    states = {}
-    names = {}
-    chroms = {}
+    positions = dict[int, int]()
+    states = dict[int, int]()
+    names = dict[int, str]()
+    chroms = dict[int, str]()
     for i in range(len(b)):
         line = b[i]
         positions[i] = int(line[1])
         names[i] = line[2]  ##change when fixed files
         chroms[i] = line[0]
-        # state= line[9]
-        states[i] = 1  # sum(s)
+        states[i] = 1  # sum(line[9]) ??
     k = 2
     return (states, names, chroms, positions, k)
 
 
 def make_RNA_data_from_fragmat(
-    gene_data: str, fragmats: List[str], vcf: str, error: float, isoforms: None
-) -> RNA_DATA:
+    gene_data: str,
+    fragmats: list[str],
+    vcf: str,
+    error: float,
+    isoforms: str
+) -> RNAData:
     ##RNA DATA
     read_list = make_readlist_from_fragmat(fragmats)
-    print("Loading VCF file")
+    print f"Loading VCF file {vcf}"
     S, names, chroms, positions, k = positions_names_states(vcf)
     chrom_set = set(chroms.values())
     n = len(S)
@@ -342,21 +231,25 @@ def make_RNA_data_from_fragmat(
 
     isodict = None
     filtered_genes = genes
-    if not (isoforms == None):
-        print("Building IsoDict")
+    if isoforms != "":
+        print "Building IsoDict"
         isodict = build_isodict(isoforms)
-        print("Filtering Transcripts")
+        print "Filtering Transcripts"
         filtered_genes = filter_transcripts(genes, isodict)
 
-    RNA_obj = rna_class.RNA_DATA(
+    return RNAData(
         S, genes, filtered_genes, error, read_list, positions, names, chroms, isodict
     )
-    return RNA_obj
 
 
-def make_data_from_fragmat(fragmat, vcf, error, RNA_readlist=[]):
+def make_data_from_fragmat(
+    fragmat: list[str],
+    vcf: string,
+    error: float,
+    RNA_readlist: dict[int, Read]
+) -> Data:
     ##regular DNA fragmat
-    read_list = make_readlist_from_fragmat_skip_1_reads(fragmat)
+    read_list = make_readlist_from_fragmat(fragmat, skip_single=True)
     if len(RNA_readlist) > 0:
         max_key = max(read_list.keys())
         for zz in RNA_readlist:
@@ -364,11 +257,12 @@ def make_data_from_fragmat(fragmat, vcf, error, RNA_readlist=[]):
     for r in read_list.values():
         r.special_key = r.keys[1]
         r.rates = {0: 0.5, 1: 0.5}
-    print("Loading VCF file")
+
+    print "Loading VCF file"
     S, names, chroms, positions, k = positions_names_states(vcf)
     n = len(S)
-    print(str(n) + " SNPs in VCF file")
-    print("Preparing data for ReadGraph")
-    D = basic_class.edges_from_readlist(read_list)
-    data_obj = basic_class.DATA(D, S, k, error, read_list, positions, names, chroms)
-    return data_obj
+    print f"{n} SNPs in VCF file"
+
+    print "Preparing data for ReadGraph"
+    D = edges_from_readlist(read_list)
+    return Data(D, S, k, error, read_list, positions, names, chroms)
