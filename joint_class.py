@@ -1,13 +1,10 @@
-import basic_class
-
-from basic_class import easy_graph
+from basic_class import Graph, build_all_comps, mins_of_comps
 from read_class import Read
-from rna_class import RNA_DATA
+from rna_class import RNAData
 from typing import dict, list, tuple
 
-
-class joint_graph(object):
-    def __init__(self, RD: RNA_DATA, G: easy_graph) -> None:
+class JointGraph:
+    def __init__(self, RD: RNAData, G: Graph) -> None:
         self.RD = RD
         self.G = G
         self.read_list = RD.all_reads

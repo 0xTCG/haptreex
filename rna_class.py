@@ -5,27 +5,58 @@ import global_vars
 import rate_finding
 import time
 
-
 def in_range(S: Node, r: tuple[int, int]) -> tuple[bool, bool]:
     p = S.position
     return (p >= r[0], p < r[1])
 
+class RNAData:
+    states: dict[int, int]
+    initial_genes: dict[int, Gene]
+    genes: dict[int, Gene]
+    error: float
+    all_reads: dict[int, Read]
+    positions: dict[int, int]
+    names: dict[int, str]
+    chroms: dict[int, str]
+    isodict: dict[str, list[float, str]]
+    k: int
 
-class RNA_DATA(object):
+    read_list: dict[int, Read]
+    short_read_list: dict[int, Read]
+    long_read_list: dict[int, Read]
+
+    nodekeys: list[int] 
+    nodes:...
+    chrom_list:
+    phasable_positions:
+    PSdict:
+
+    reads_by_indiv_gene:
+
+    final:
+    snps_to_use:
+
+    reads_by_comsnps:
+    read_dict:
+    counts:
+    LLsnp:
+    rates:
+
+
     def __init__(
-        self,
-        S,
-        genes,
-        filtered_genes,
-        error,
-        read_list,
-        positions,
-        names,
-        chroms,
-        isodict,
+        self: RNAData,
+        states: dict[int, int],
+        genes: dict[int, Gene],
+        filtered_genes: dict[int, Gene],
+        error: float,
+        read_list: dict[int, Read],
+        positions: dict[int, int],
+        names: dict[int, str],
+        chroms: dict[int, str],
+        isodict: dict[str, list[float, str]]
     ):
         self.k = 2
-        self.states = S
+        self.states = states
         self.initial_genes = genes
         self.genes = filtered_genes
         self.error = error
@@ -35,10 +66,8 @@ class RNA_DATA(object):
         self.chroms = chroms
         self.isodict = isodict
 
-        ######################################################################
-
-        short_read_list = {}
-        long_read_list = {}
+        short_read_list = dict[int, Read]()
+        long_read_list = dict[int, Read]()
         for i in self.all_reads:
             r = self.all_reads[i]
             r.rates = {0: 0.5, 1: 0.5}
@@ -51,9 +80,6 @@ class RNA_DATA(object):
         self.short_read_list = short_read_list
         self.long_read_list = long_read_list
 
-        ######################################################################
-
-        # print set(chroms.values())
         self.nodekeys = sorted(list(self.node_keys()))
 
         d = {}
@@ -125,11 +151,8 @@ class RNA_DATA(object):
 
     ######################################################################
 
-    def node_keys(self):
-        s = {}
-        for r in self.read_list.values():
-            for k in r.keys:
-                s[k] = 0
+    def node_keys(self: RNAData) -> list[int]:
+        s = {k: 0 for r in self.read_list.values() for k in r.keys}
         return list(s.keys())
 
     def make_position_dict(self):
