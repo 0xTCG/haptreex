@@ -139,10 +139,9 @@ class Graph:
     def __init__(self: Graph, data: Data):
         # ReadGraph object, takes in data object
 
-        print "Making ReadGraph"
         self.data = data
         self.size = len(self.data.nodekeys)
-        print f"{self.size} SNPs in non-trivial connected components"
+        print(f"{self.size} SNPs in non-trivial connected components")
 
         self.components, self.comps_dict = Graph.build_all_comps(self)
         self.comp_mins = mins_of_comps(self.components)

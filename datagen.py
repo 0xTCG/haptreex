@@ -9,7 +9,7 @@ from global_vars import QUALITY_CUTOFF
 # GENES
 
 def determine_genes_gtf(gene_data: str, chroms: set[str]) -> dict[int, Gene]:
-    print "Loading and formatting genes"
+    print("Loading and formatting genes")
     f = open(gene_data, "r")
     a = list(f.readlines())
     f.close()
@@ -144,7 +144,7 @@ def make_readlist_from_fragmat(
     skip_single: bool = False
 ) -> dict[int, Read]:
     # translates fragment matrix into a list of reads
-    print "Loading and formatting fragments"
+    print("Loading and formatting fragments")
     a = list[str]()
     for fragmat in fragmats:
         f = open(fragmat, "r")
@@ -162,7 +162,7 @@ def make_readlist_from_fragmat(
             if not skip_single or len(read) > 1:
                 read_list_list.append(read)
 
-    print f"{len(read_list_list)} reads of sufficient quality"
+    print(f"{len(read_list_list)} reads of sufficient quality")
     read_list = dict[int, Read]()
     read_counter = dict[list[tuple[int, int]], int]()
     i = 0
@@ -173,7 +173,7 @@ def make_readlist_from_fragmat(
         else:
             read_counter[tup_read] = 1
     i = 0
-    print f"{len(read_counter)} distinct reads"
+    print(f"{len(read_counter)} distinct reads")
     for tup in read_counter:
         read = dict[list[tuple[int, int]], int]()
         for k, v in tup:
@@ -221,20 +221,18 @@ def make_RNA_data_from_fragmat(
 ) -> RNAData:
     ##RNA DATA
     read_list = make_readlist_from_fragmat(fragmats)
-    print f"Loading VCF file {vcf}"
+    print(f"Loading VCF file {vcf}")
     S, names, chroms, positions, k = positions_names_states(vcf)
     chrom_set = set(chroms.values())
     n = len(S)
-    # print str(n)+ ' SNPs in VCF file'
     print("Preparing data for ReadGraph")
     genes = determine_genes_gtf(gene_data, chrom_set)
 
     isodict = None
     filtered_genes = genes
     if isoforms != "":
-        print "Building IsoDict"
+        print("Building IsoDict")
         isodict = build_isodict(isoforms)
-        print "Filtering Transcripts"
         filtered_genes = filter_transcripts(genes, isodict)
 
     return RNAData(
@@ -258,11 +256,10 @@ def make_data_from_fragmat(
         r.special_key = r.keys[1]
         r.rates = {0: 0.5, 1: 0.5}
 
-    print "Loading VCF file"
+    print("Loading VCF file")
     S, names, chroms, positions, k = positions_names_states(vcf)
     n = len(S)
-    print f"{n} SNPs in VCF file"
+    print(f"{n} SNPs in VCF file")
 
-    print "Preparing data for ReadGraph"
     D = edges_from_readlist(read_list)
     return Data(D, S, k, error, read_list, positions, names, chroms)

@@ -1,6 +1,4 @@
-from pyannotate_runtime import collect_types
-
-import global_vars
+from global_vars import V
 import datagen
 import joint_class
 import rna_class
@@ -8,73 +6,90 @@ import basic_class
 import alg
 import stats
 import output
-import prescoring
 import os
 import time
 import sys
-import argparse
-import subprocess
+# import argparse
+# import subprocess
 
 # HapTree-X V1.0
 
-parser = argparse.ArgumentParser(description="HapTree-X!")
-parser.add_argument(
-    "--RNAfragmat", metavar="filename", type=str, help="RNAfragmat", default=None
-)
-parser.add_argument(
-    "--DNAfragmat", metavar="filename", type=str, help="DNAfragmat", default=None
-)
-parser.add_argument(
-    "--isoforms", metavar="filename", type=str, help="Isoform file", default=None
-)
-parser.add_argument("--vcf", metavar="filename", type=str, help="VCF file")
-parser.add_argument(
-    "--outputfolder",
-    metavar="foldername",
-    type=str,
-    help="Output folder name",
-    default="HapTreeXResults",
-)
-parser.add_argument(
-    "--gene_info",
-    metavar="filename",
-    type=str,
-    help="Gene model file with GTF format",
-    default=None,
-)
+# parser = argparse.ArgumentParser(description="HapTree-X!")
+# parser.add_argument(
+#     "--RNAfragmat", metavar="filename", type=str, help="RNAfragmat", default=None
+# )
+# parser.add_argument(
+#     "--DNAfragmat", metavar="filename", type=str, help="DNAfragmat", default=None
+# )
+# parser.add_argument(
+#     "--isoforms", metavar="filename", type=str, help="Isoform file", default=None
+# )
+# parser.add_argument("--vcf", metavar="filename", type=str, help="VCF file")
+# parser.add_argument(
+#     "--outputfolder",
+#     metavar="foldername",
+#     type=str,
+#     help="Output folder name",
+#     default="HapTreeXResults",
+# )
+# parser.add_argument(
+#     "--gene_info",
+#     metavar="filename",
+#     type=str,
+#     help="Gene model file with GTF format",
+#     default=None,
+# )
 
-args = parser.parse_args()
+# args = parser.parse_args()
 
-RNAfragmat = args.RNAfragmat
-DNAfragmat = args.DNAfragmat
-isoforms = args.isoforms
-gene_data = args.gene_info
-outputname = args.outputfolder
-vcf = args.vcf
+RNAfragmat = sys.argv[1] # args.RNAfragmat
+DNAfragmat = sys.argv[2] # args.DNAfragmat
+gene_data = sys.argv[3] # args.gene_info
+vcf = sys.argv[4] #args.vcf
+outputname = sys.argv[5] #args.outputfolder
+isoforms = sys.argv[6] # args.isoforms
 
 time_start = time.time()
 
-if vcf == None:
-    sys.exit("Error: vcf required")
+#if vcf == None:
+#    raise ValueError("Error: vcf required")
 
-if RNAfragmat == None and DNAfragmat == None:
-    sys.exit(
-        "Error: at least one of RNAfragmat or DNAfragmat should be given. You can use Chair tool to generate them from SAM files."
-    )
+# if RNAfragmat == None and DNAfragmat == None:
+#     sys.exit(
+#         "Error: at least one of RNAfragmat or DNAfragmat should be given. You can use Chair tool to generate them from SAM files."
+#     )
 
 RNAfragmats = [RNAfragmat]
 DNAfragmats = [DNAfragmat]
 
 if not os.path.exists(outputname):
-    subprocess.call(["mkdir", outputname])
+    os.system (f"mkdir -p {outputname}")
 pair_thresh = 0.7
-# print 'phasing' + DNAfragmats[0]
+
+
+def make_golden_from_true2(
+    filename: str,
+) -> tuple[dict[int, dict[int, str]], list[str], list[str]]:
+    f = open(filename, "r")
+    a = f.readlines()
+    f.close()
+    i = 0
+    while a[i][0] == "#":
+        i += 1
+    c = [x.split()[9][:3] for x in a[i:]]
+    vChroms = [x.split()[0] for x in a[i:]]
+    vPositions = [x.split()[1] for x in a[i:]]
+    d = {0: {}, 1: {}}
+    for j in range(len(c)):
+        if c[j][1] == "|":
+            d[0][j] = int(c[j][0])
+            d[1][j] = int(c[j][2])
+        else:
+            d[0][j] = "."
+            d[1][j] = "."
+    return d, vChroms, vPositions
 print("Loading VCF file for scoring")
-(
-    global_vars.V,
-    global_vars.vcfChroms,
-    global_vars.vcfPositions,
-) = prescoring.make_golden_from_true2(vcf)
+V, vcfChroms, vcfPositions = make_golden_from_true2(vcf)
 
 if RNAfragmat == None or gene_data == None:
     print("Missing RNAfragmat, running phasing without DASE")
@@ -119,10 +134,6 @@ else:
     else:
         D = datagen.make_data_from_fragmat(DNAfragmats, vcf, 0.02, RD.long_read_list)
     G = basic_class.easy_graph(D)
-    # RDX = alg.RNA_phase(.001,pair_thresh,.02,RD.read_dict, RD.comp_mins, RD.components) #pair_thresh is prob of 00 or 11 as opposed to 01 or 10
-    # output.make_solution_RNA(RDX,RD,outputname,'HapTreeX_onlyDASE_output.txt') #Phasing using only 1-reads in RNAfragmat
-    # GX = alg.RNA_phase(.001,pair_thresh,.02,G.read_dict, G.comp_mins, G.components)
-    # output.make_solution(GX,G,outputname,'HapTreeX_noDASE_output.txt') #Phasing using only 2-reads from RNAfragmat + DNAfragmat
     jG = joint_class.joint_graph(RD, G)
     time2 = time.time()
     print(("Pt 2 took ", time2 - times))
@@ -135,8 +146,8 @@ else:
         jGX,
         outputname,
         "HapTreeX_withDASE_output.txt",
-        global_vars.vcfChroms,
-        global_vars.vcfPositions,
+        vcfChroms,
+        vcfPositions,
     )  # Phasing using both 1-reads and 2-reads from DNAfragmat + RNAfragmat
     time4 = time.time()
     print(("Pt 4 took ", time4 - time3))
