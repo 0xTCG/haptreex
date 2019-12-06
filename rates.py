@@ -1,6 +1,6 @@
 from math import log, exp
-from global_vars import choose
-from read_class import Read, sample_from_reads
+from common import choose
+from read import Read, sample_from_reads
 
 
 def get_counts(

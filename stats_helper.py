@@ -1,5 +1,5 @@
 from math import log
-from rna_class import RNAData
+from rna import RNAData
 
 
 def clusters_size(

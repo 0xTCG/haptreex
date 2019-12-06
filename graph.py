@@ -1,5 +1,5 @@
 from itertools import combinations
-from read_class import Read
+from read import Read
 
 class Node:
     k: int

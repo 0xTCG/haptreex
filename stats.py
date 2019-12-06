@@ -1,7 +1,7 @@
 from alg import RNA_phase
-from RD_updates import *
-from rna_class import RNAData
-import global_vars
+from stats_helper import *
+from rna import RNAData
+import common
 
 
 def num_SNP(STU: dict[int, list[int]]) -> int:
@@ -129,13 +129,13 @@ def stats(
     RD.make_components(current_STU6)
     X = alg.RNA_phase(
         0.0001,
-        global_vars.pair_thresh,
+        common.pair_thresh,
         RD.error,
         RD.read_dict,
         RD.comp_mins,
         RD.components,
     )
-    S = [switches_in_comp2(x, X, global_vars.V, RD)[0] for x in X]
+    S = [switches_in_comp2(x, X, common.V, RD)[0] for x in X]
     # print sum(S), len(RD.components), len(X)
     if len(RD.components) == 0:
         print(
@@ -145,10 +145,10 @@ def stats(
             + "well, please run chair with parameter 1"
         )
 
-    C = con_dis_non(X, global_vars.V)[1]
+    C = con_dis_non(X, common.V)[1]
     if show:
         for x in X:
-            if switches_in_comp2(x, X, global_vars.V, RD)[0] > 0:
+            if switches_in_comp2(x, X, common.V, RD)[0] > 0:
                 gr = RD.SNP_to_genomic_region[x]
 
 

@@ -1,8 +1,8 @@
-from gene_class import Gene
-from read_class import Read
-from rna_class import RNAData
-from basic_class import Data, edges_from_readlist
-from global_vars import QUALITY_CUTOFF
+from gene import Gene
+from read import Read
+from rna import RNAData
+from graph import Data, edges_from_readlist
+from common import QUALITY_CUTOFF
 
 
 ###########################################################################

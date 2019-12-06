@@ -8,8 +8,6 @@ PAIR_TRESH = 0.8
 
 
 V = dict[int, dict[int, str]]()
-vcfChroms = list[str]()
-vcfPositions = list[str]()
 
 
 def cdf(n: int, k: int, var: int) -> float:

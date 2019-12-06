@@ -1,8 +1,8 @@
-from basic_class import Node
-from gene_class import make_genomic_graph, assign_reads_to_genomic_regions
-from read_class import Read
-from global_vars import score
-from rate_finding import find_rates
+from graph import Node
+from gene import make_genomic_graph, assign_reads_to_genomic_regions
+from read import Read
+from common import score
+from rates import find_rates
 
 
 def in_range(S: Node, r: tuple[int, int]) -> tuple[bool, bool]:

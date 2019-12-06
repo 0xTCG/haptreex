@@ -1,8 +1,8 @@
-from global_vars import V
+from common import V
 import datagen
-import joint_class
-import rna_class
-import basic_class
+import joint
+import rna
+import graph
 import alg
 import stats
 import output
@@ -95,7 +95,7 @@ if RNAfragmat == None or gene_data == None:
     print("Missing RNAfragmat, running phasing without DASE")
     if DNAfragmat == None:  # Only RNA data provided without gene info
         D = datagen.make_data_from_fragmat(RNAfragmats, vcf, 0.02)
-        G = basic_class.easy_graph(D)
+        G = graph.easy_graph(D)
         GX = alg.RNA_phase(
             0.001, pair_thresh, 0.02, G.read_dict, G.comp_mins, G.components
         )
@@ -108,7 +108,7 @@ if RNAfragmat == None or gene_data == None:
         D = datagen.make_data_from_fragmat(DNAfragmats, vcf, 0.02)
         time1 = time.time()
         print(("Pt 1 took ", time1 - time_start))
-        G = basic_class.easy_graph(D)
+        G = graph.easy_graph(D)
         time2 = time.time()
         print(("Pt 2 took ", time2 - time1))
         GX = alg.RNA_phase(
@@ -130,11 +130,11 @@ else:
     times = time.time()
     print(("stats took ", times - time1))
     if DNAfragmat == None:
-        D = rna_class.make_data_from_RNA_data(RD)
+        D = rna.make_data_from_RNA_data(RD)
     else:
         D = datagen.make_data_from_fragmat(DNAfragmats, vcf, 0.02, RD.long_read_list)
-    G = basic_class.easy_graph(D)
-    jG = joint_class.joint_graph(RD, G)
+    G = graph.easy_graph(D)
+    jG = joint.joint_graph(RD, G)
     time2 = time.time()
     print(("Pt 2 took ", time2 - times))
     jGX = alg.RNA_phase(

@@ -1,6 +1,6 @@
-from basic_class import Graph, mins_of_comps
-from read_class import Read
-from rna_class import RNAData
+from graph import Graph, mins_of_comps
+from read import Read
+from rna import RNAData
 
 
 class MiniNode:

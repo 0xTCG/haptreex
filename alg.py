@@ -1,6 +1,6 @@
 from math import log
-from read_class import Read
-from global_vars import CONFIDENCE
+from read import Read
+from common import CONFIDENCE
 
 
 def read_val_tail(

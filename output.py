@@ -1,5 +1,5 @@
-from basic_class import Graph
-from rna_class import RNAData
+from graph import Graph
+from rna import RNAData
 
 
 def comp_MEC(m: int, X: dict[int, dict[int, dict[int, int]]], G: Graph) -> int:

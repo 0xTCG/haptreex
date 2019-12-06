@@ -1,5 +1,5 @@
-from basic_class import Node
-from read_class import Read
+from graph import Node
+from read import Read
 
 
 class Gene:
