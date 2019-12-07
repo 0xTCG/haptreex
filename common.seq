@@ -16,13 +16,28 @@ def cdf(n: int, k: int, var: int) -> float:
     return 0.5 * (1 + erf((k + 0.5 - mu) / sqrt(2 * n * p * (1 - p))))
 
 
-def binom(n: int, k: int) -> int:
-    # n CHOOSE k
-    j = min(k, n - k)
-    numerator = 1
-    for i in range(j):
-        numerator = numerator * (n - i)
-    return numerator // factorial(j)
+# def binom(n: int, k: int) -> int:
+#     # n CHOOSE k
+#     j = min(k, n - k)
+#     numerator = 1
+#     for i in range(j):
+#         numerator = numerator * (n - i)
+#     return numerator // factorial(j)
+def binom(N: int, k: int) -> int:
+    """https://github.com/scipy/scipy/blob/v1.3.3/scipy/special/_comb.pyx"""
+    # Fast path with machine integers
+    INT_MAX = int((u64(1) << u64(63)) - u64(1))
+    if k > N or N == INT_MAX:
+        return 0
+    M = N + 1
+    nterms = min(k, N - k)
+    val = 1
+    for j in range(1, nterms + 1):
+        if val > INT_MAX // (M - j):
+            return 0
+        val *= M - j
+        val //= j
+    return int(val)
 
 
 def score(pair: list[int]) -> float:

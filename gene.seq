@@ -74,13 +74,7 @@ def gene_by_snp_dict(GG: dict[int, Gene]) -> dict[int, set[int]]:
 def make_genomic_graph(GG: dict[int, Gene]):  # making neighbours
     s_dict = gene_by_snp_dict(GG)  # snp to gene
     for x in GG:
-        g = GG[x]
-        g.neighbors = set()
-    for x in GG:
-        g = GG[x]
-        for s in g.snps:
-            for y in s_dict[s]:
-                g.neighbors.add(y)
+        GG[x].neighbors = {y for s in g.snps for y in s_dict[s]}
 
 
 def build_genomic_comp(start: Gene, GG: dict[int, Gene]) -> set[int]:
