@@ -11,12 +11,9 @@ def build_comp(g, start: int) -> list[int]:
     builds connected component containing the node start
     returns ordered list of nodes in component
     """
-    s = {[start]}
-    old_batch = {[start]}
+    s, old_batch = {[start]}, {[start]}
     while len(old_batch) > 0:
-        new_batch = set(list[int]())
-        for x in old_batch:
-            new_batch.update(set(g.nodes[x].neighbors))
+        new_batch = {y for x in old_batch for y in g.nodes[x].neighbors}
         new_batch = new_batch.difference(s)
         s.update(new_batch)
         old_batch = new_batch
@@ -162,7 +159,7 @@ class Graph:
     comp_reads: dict[int, list[Read]]
 
     def __init__(self: Graph, data: Data):
-        # ReadGraph object, takes in data object
+        """ReadGraph object, takes in data object"""
 
         self.data = data
         self.size = len(self.data.nodekeys)
