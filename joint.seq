@@ -24,6 +24,12 @@ class JointGraph:
     read_dict: dict[int, list[Read]]
     comp_reads: dict[int, list[Read]]
 
+    forward_short: dict[int, int]
+    forward_long: dict[int, int]
+    back_short: dict[int, int]
+    back_long: dict[int, int]
+
+
     def __init__(self: JointGraph, RD: RNAData, G: Graph):
         self.RD = RD
         self.G = G
@@ -72,17 +78,17 @@ class JointGraph:
         Ll = len(self.long_comp_mins)
         self.Ll = Ll
 
-        forward_short = {}
-        forward_long = {}
-        back_short = {}
-        back_long = {}
+        forward_short = dict[int, int]()
+        forward_long = dict[int, int]()
+        back_short = dict[int, int]()
+        back_long = dict[int, int]()
         for i in range(Ls):
             Ms = self.short_comp_mins[i]
             forward_short[i] = self.RD.components[Ms]
             back_short[Ms] = i
         for i in range(Ls, Ls + Ll):
             Ml = self.long_comp_mins[i - Ls]
-            forward_long[i] = self.long_components[Ml]
+            forward_long[i] = self.G.components[Ml]
             back_long[Ml] = i
 
         for i in range(Ls):
@@ -106,7 +112,6 @@ class JointGraph:
 
         return nodes
 
-      
 
     def make_read_dict(
         self: JointGraph

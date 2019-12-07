@@ -97,7 +97,7 @@ def build_all_genomic_comps(
     comps = dict[int, set[int]]()
     comps_dict = dict[int, int]()
     for start in GG:
-        if not GG[start].snps == []:
+        if len(GG[start].snps) > 0:
             if start not in comps_dict:
                 s = build_genomic_comp(GG[start], GG)
                 comps[start] = s

@@ -148,7 +148,6 @@ class Data:
                 num
             )
         self.edges = {e: Edge([self.nodes[e[0]], self.nodes[e[1]]], self.k) for e in E}
-        
 
 
 class Graph:

@@ -150,29 +150,3 @@ def stats(
         for x in X:
             if switches_in_comp2(x, X, common.V, RD)[0] > 0:
                 gr = RD.SNP_to_genomic_region[x]
-
-
-def restrict_phasing(snp_to_gr, phasing_comps_old):
-    # gr is "genomic_region", cluster of overlapping genes
-    phasing_comps_new = {}
-    for m in phasing_comps_old:
-        local_comps_by_gr = {}
-        comp = phasing_comps_old[m][0]
-        for snp in comp:
-            if snp in snp_to_gr:
-                gr = snp_to_gr[snp]
-                if gr in local_comps_by_gr:
-                    local_comps_by_gr[gr].append(snp)
-                else:
-                    local_comps_by_gr[gr] = [snp]
-        for gr in local_comps_by_gr:
-            sub_snps_gr = local_comps_by_gr[gr]
-            if len(sub_snps_gr) > 1:
-                comp_min = min(local_comps_by_gr[gr])
-                comp_phase = {0: {}, 1: {}}
-                for snp in sub_snps_gr:
-                    comp_phase[0][snp] = phasing_comps_old[m][0][snp]
-                    comp_phase[1][snp] = phasing_comps_old[m][1][snp]
-                phasing_comps_new[comp_min] = comp_phase
-
-    return phasing_comps_new

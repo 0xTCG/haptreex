@@ -99,7 +99,7 @@ class RNAData:
                 self.k,
                 index,
                 0,
-                [],
+                list[int](),
                 self.positions[index],
                 self.names[index],
                 self.chroms[index],
@@ -307,8 +307,7 @@ class RNAData:
             r_i = 0
             s_i = 0
 
-            snps = {i: [] for i in range(g.exon_count)}
-
+            snps = {i: list[Node]() for i in range(g.exon_count)}
             while s_i < L:
                 S = ALL_SNPS[s_i]
                 r = g.ranges[r_i]

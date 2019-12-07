@@ -78,7 +78,7 @@ def make_golden_from_true2(
     c = [x.split()[9][:3] for x in a[i:]]
     vChroms = [x.split()[0] for x in a[i:]]
     vPositions = [x.split()[1] for x in a[i:]]
-    d = {0: {}, 1: {}}
+    d = {0: dict[int, int](), 1: dict[int, int]()}
     for j in range(len(c)):
         if c[j][1] == "|":
             d[0][j] = int(c[j][0])
