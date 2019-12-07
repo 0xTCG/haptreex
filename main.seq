@@ -1,4 +1,4 @@
-from common import V
+from common import V, DOT
 import datagen
 import joint
 import rna
@@ -10,7 +10,7 @@ import os
 import time
 import sys
 
-# HapTree-X V1.0
+print 'HapTree-X v1.0 [Seq]'
 
 # parser = argparse.ArgumentParser(description="HapTree-X!")
 # parser.add_argument(
@@ -68,7 +68,7 @@ pair_thresh = 0.7
 
 def make_golden_from_true2(
     filename: str
-) -> tuple[dict[int, dict[int, str]], list[str], list[str]]:
+) -> tuple[dict[int, dict[int, int]], list[str], list[str]]:
     f = open(filename, "r")
     a = f.readlines()
     f.close()
@@ -84,8 +84,8 @@ def make_golden_from_true2(
             d[0][j] = int(c[j][0])
             d[1][j] = int(c[j][2])
         else:
-            d[0][j] = "."
-            d[1][j] = "."
+            d[0][j] = DOT
+            d[1][j] = DOT
     return d, vChroms, vPositions
 print f"Loading VCF file {vcf} for scoring"
 V, vcfChroms, vcfPositions = make_golden_from_true2(vcf)

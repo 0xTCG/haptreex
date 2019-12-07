@@ -69,7 +69,7 @@ def make_genomic_graph(GG: dict[int, Gene]):  # making neighbours
             else:
                 s_dict[s].add(g.index)
     for x in GG:
-        GG[x].neighbors = {y for s in g.snps for y in s_dict[s]}
+        GG[x].neighbors = {y for s in GG[x].snps for y in s_dict[s]}
 
 
 def build_genomic_comp(start: Gene, GG: dict[int, Gene]) -> set[int]:

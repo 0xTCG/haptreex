@@ -30,7 +30,7 @@ class Read:
         return len(self.read)
 
     def make_mini_reads(self: Read) -> dict[int, dict[int, int]]:
-        mini_read_dict = dict[int, dict[int, int]]
+        mini_read_dict = dict[int, dict[int, int]]()
         mini_read = copy(self.read)
         for key in reversed(sorted(self.keys)):
             mini_read_dict[key] = mini_read

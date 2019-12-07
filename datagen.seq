@@ -135,7 +135,7 @@ def make_read_of_frag(frag0: str) -> tuple[list[tuple[int, int]], int]:
 
 def make_readlist_from_fragmat(
     fragmats: list[str],
-    skip_single: bool = False
+    skip_single: bool
 ) -> dict[int, Read]:
     # translates fragment matrix into a list of reads
     print "Loading and formatting fragments"
@@ -160,16 +160,11 @@ def make_readlist_from_fragmat(
     i = 0
     for tup_read in read_list_list:
         i += 1
-        if tup_read in read_counter:
-            read_counter[tup_read] += 1
-        else:
-            read_counter[tup_read] = 1
+        read_counter[tup_read] += 1
     i = 0
     print f"{len(read_counter)} distinct reads"
     for tup in read_counter:
-        read = dict[list[tuple[int, int]], int]()
-        for k, v in tup:
-            read[k] = v
+        read = {k: v for k, v in tup}
         read_list[i] = Read(read, read_counter[tup], i)
         i += 1
     return read_list
@@ -212,7 +207,7 @@ def make_RNA_data_from_fragmat(
     isoforms: str
 ) -> RNAData:
     ##RNA DATA
-    read_list = make_readlist_from_fragmat(fragmats)
+    read_list = make_readlist_from_fragmat(fragmats, skip_single=False)
     print f"Loading VCF file {vcf}"
     S, names, chroms, positions, k = positions_names_states(vcf)
     chrom_set = set(chroms.values())
@@ -236,7 +231,7 @@ def make_data_from_fragmat(
     fragmat: list[str],
     vcf: str,
     error: float,
-    RNA_readlist: dict[int, Read]
+    RNA_readlist: dict[int, Read] = dict[int, Read]()
 ) -> Data:
     ##regular DNA fragmat
     read_list = make_readlist_from_fragmat(fragmat, skip_single=True)

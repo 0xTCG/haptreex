@@ -6,8 +6,8 @@ QUALITY_CUTOFF = 10
 CONFIDENCE = 0.5
 PAIR_TRESH = 0.8
 
-
-V = dict[int, dict[int, str]]()
+DOT = -10 # "."
+V = dict[int, dict[int, int]]()
 
 
 def cdf(n: int, k: int, var: int) -> float:

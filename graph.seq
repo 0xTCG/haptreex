@@ -3,7 +3,7 @@ from read import Read
 
 
 def mins_of_comps(comps: dict[int, list[int]]) -> list[int]:
-    return list({min(comp) for comp in comp.values()}).sort()
+    return list({min(comp) for comp in comps.values()}).sort()
 
 
 def build_comp(g, start: int) -> list[int]:
@@ -63,7 +63,7 @@ class Edge:
     k: int
     indices: tuple[int, int]
     
-    def __init__(self: Edge, node_pair: tuple[Node], k: int):
+    def __init__(self: Edge, node_pair: tuple[Node, Node], k: int):
         self.nodes = node_pair
         self.k = k
         self.indices = (node_pair[0].index, node_pair[1].index)
@@ -115,21 +115,13 @@ class Data:
         self.names = names
         self.chroms = chroms
 
-        E = list(data.keys())
         # computes all nodes actually seen by reads
-        s = set[int]()
-        for e in self.E:
-            s.add(e[0])
-            s.add(e[1])
-        self.nodekeys = sorted(list(s))
+        self.nodekeys = sorted(list({i for e in data for i in e}))
         # returns dictionary mapping NODE to those nodes adjacent to NODE
-        adj = dict[int, list[int]]()
-        for i in self.nodekeys:
-            adj[i] = list[int]()
-        for e in E:
+        adj = {i: list[int]() for i in self.nodekeys}
+        for e in data:
             adj[e[0]].append(e[1])
             adj[e[1]].append(e[0])
-        return adj
 
         self.nodes = dict[int, Node]()
         for num in range(len(self.nodekeys)):
@@ -144,7 +136,9 @@ class Data:
                 self.chroms[index],
                 num
             )
-        self.edges = {e: Edge([self.nodes[e[0]], self.nodes[e[1]]], self.k) for e in E}
+        edges = dict[tuple[int, int], Edge]() # TODO
+        for e in data:
+            edges[e] = Edge((self.nodes[e[0]], self.nodes[e[1]]), self.k) 
 
 
 class Graph:
@@ -186,8 +180,8 @@ class Graph:
 def edges_from_readlist(read_list: dict[int, Read]):
     """
     returns dictionary with keys those edges that appear in G and values all 1
-    """"
-    d = dict[int, Read]()
+    """
+    d = dict[tuple[int, int], int]()
     for zz in read_list:
         seen_nodes = read_list[zz].keys
         for pair in combinations(seen_nodes, 2):
