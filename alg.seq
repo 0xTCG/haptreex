@@ -163,34 +163,7 @@ def prune(
         new_index = 0  # random.randint(0, len(new_lists)-1)
         new_lists = [new_lists[new_index]]
         new_dict = {0: new_dict[new_index]}
-    return new_lists, new_dict
-
-
-def RNA_solution(
-    start: int,
-    threshold: float,
-    p: float,
-    error: float,
-    read_dict: dict[int, list[Read]],
-    components: dict[int, list[int]]
-) -> list[dict[int, dict[int, int]]]:
-    # find phasing solution for connected component starting at start
-    init = {0: dict[int, int](), 1: dict[int, int]()}
-    lists = [init]
-    table = {0: 0}
-    skipped = True  # set to True to allow allele permutations
-    m_prev = -1 # SEQ/TODO: check! originally  None
-    for m in components[start]:
-        if skipped:
-            lists, table = branch(m, m_prev, lists, table, threshold, p, error, read_dict)
-            lists, table = prune(m, lists, table, components)
-        else:  # specify beginning to remove allele permutations
-            init = {0: {m: 0}, 1: {m: 1}}
-            lists = [init]
-            table = {0: 0}
-            skipped = True
-        m_prev = m
-    return lists
+    return new_lists, new_dict    
 
 
 def RNA_phase(
@@ -202,6 +175,22 @@ def RNA_phase(
     components: dict[int, list[int]]
 ):
     phases = dict[int, dict[int, dict[int, int]]]()
-    for s in comp_mins:
-        phases[s] = RNA_solution(s, threshold, p, error, read_dict, components)[0]
+    for start in comp_mins:
+        # find phasing solution for connected component starting at start
+        init = {0: dict[int, int](), 1: dict[int, int]()}
+        lists = [init]
+        table = {0: 0}
+        skipped = True  # set to True to allow allele permutations
+        m_prev = -1 # SEQ/TODO: check! originally  None
+        for m in components[start]:
+            if skipped:
+                lists, table = branch(m, m_prev, lists, table, threshold, p, error, read_dict)
+                lists, table = prune(m, lists, table, components)
+            else:  # specify beginning to remove allele permutations
+                init = {0: {m: 0}, 1: {m: 1}}
+                lists = [init]
+                table = {0: 0}
+                skipped = True
+            m_prev = m
+        phases[start] = lists[0]
     return phases

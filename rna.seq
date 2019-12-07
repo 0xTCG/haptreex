@@ -13,18 +13,17 @@ def in_range(S: Node, r: tuple[int, int]) -> tuple[bool, bool]:
 
 class RNAData:
     states: dict[int, int]
-    initial_genes: dict[int, Gene]
+    # initial_genes: dict[int, Gene]
     genes: dict[int, Gene]
     error: float
-    all_reads: dict[int, Read]
+    # all_reads: dict[int, Read]
     positions: dict[int, int]
     names: dict[int, str]
     chroms: dict[int, str]
-    isodict: dict[str, list[float, str]]
+    # isodict: dict[str, list[float, str]]
     k: int
 
     read_list: dict[int, Read]
-    short_read_list: dict[int, Read]
     long_read_list: dict[int, Read]
 
     nodekeys: list[int]
@@ -39,8 +38,8 @@ class RNAData:
     SNP_to_genomic_region: dict[int, int]
     genomic_region_to_SNPs: dict[int, list[int]]
     reads_by_GR: dict[str, list[Read]]
-    reads_by_indiv_gene: dict[int, dict[int, list[Read]]]
-    final: dict[int, list[int]]
+    # reads_by_indiv_gene: dict[int, dict[int, list[Read]]]
+    # final: dict[int, list[int]]
     snps_to_use: dict[int, list[int]]
 
     reads_by_comsnps: dict[int, list[Read]]
@@ -67,19 +66,19 @@ class RNAData:
     ):
         self.k = 2
         self.states = states
-        self.initial_genes = genes
+        # self.initial_genes = genes
         self.genes = filtered_genes
         self.error = error
-        self.all_reads = read_list
+        # self.all_reads = read_list
         self.positions = positions
         self.names = names
         self.chroms = chroms
-        self.isodict = isodict
+        # self.isodict = isodict
 
         short_read_list = dict[int, Read]()
         long_read_list = dict[int, Read]()
-        for i in self.all_reads:
-            r = self.all_reads[i]
+        for i in read_list:
+            r = read_list[i]
             r.rates = {0: 0.5, 1: 0.5}
             if len(r.keys) == 1:
                 short_read_list[i] = r
@@ -87,7 +86,7 @@ class RNAData:
                 long_read_list[i] = r
 
         self.read_list = short_read_list
-        self.short_read_list = short_read_list
+        # self.short_read_list = short_read_list
         self.long_read_list = long_read_list
 
         self.nodekeys = sorted(list(self.node_keys()))
@@ -123,7 +122,7 @@ class RNAData:
 
         ######################################################################
 
-        reads = self.all_reads
+        reads = read_list
         (
             self.comps,
             self.comps_dict,
@@ -132,14 +131,14 @@ class RNAData:
             self.genomic_region_to_SNPs,
             self.reads_by_GR
         ) = assign_reads_to_genomic_regions(self.genes, reads)
-        self.reads_by_indiv_gene = self.assign_reads_to_indiv_genes()
+        # self.reads_by_indiv_gene = self.assign_reads_to_indiv_genes()
 
         ######################################################################
 
         # Here is where we decide which types of genes to use, those with no isoforms ("no_splicing")
         # all SNPs such that if there are multiple isoforms, those SNPs fall into all of them ("final")
 
-        self.final = self.dual_gene()
+        # self.final = self.dual_gene()
         self.snps_to_use = self.find_snps_to_use_all()
 
         ######################################################################
@@ -165,20 +164,6 @@ class RNAData:
             p = S.position
             position_to_SNP_index_dict[c][p] = S.index
         return position_to_SNP_index_dict
-
-    def assign_reads_to_indiv_genes(self: RNAData) -> dict[int, dict[int, list[Read]]]:
-        D = {gr: dict[int, list[Read]]() for gr in self.comps_mins_dict}
-        for gr in self.comps_mins_dict:
-            for g in self.comps[gr]:
-                D[gr][g] = list[Read]()
-                snps = self.genes[g].snps
-                for r in self.reads_by_GR[gr]:
-                    tf = True
-                    for k in r.keys:
-                        tf = tf and (k in snps)
-                    if tf:
-                        D[gr][g].append(r)
-        return D
 
     def dual_gene(self: RNAData) -> dict[int, list[int]]:
         D = dict[int, list[list[int]]]()
@@ -342,16 +327,8 @@ class RNAData:
             return -1
         else:
             positions = self.phasable_positions[g.chrom]
-            L = len(positions)
-            PSdict = self.PSdict[g.chrom]
-            nodekeys = self.nodekeys
             h = bisect_left(positions, b)
-            if h < L:
-                i = positions[h]
-                j = PSdict[i]
-                return j
-            else:
-                return -1
+            return self.PSdict[g.chrom][positions[h]] if h < len(positions) else -1
 
 
 def make_data_from_RNA_data(RD: RNAData) -> Data:

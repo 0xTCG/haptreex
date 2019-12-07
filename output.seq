@@ -4,15 +4,13 @@ from rna import RNAData
 
 def comp_MEC(m: int, X: dict[int, dict[int, dict[int, int]]], G: Graph) -> int:
     # computes MEC score of component containing node m
-    total = 0
-    for read in G.comp_reads[m]:
-        counts = [0] * G.k
-        for key in read.keys:
-            for i in range(G.k):
-                if not X[m][i][key] == read.read[key]:
-                    counts[i] += 1
-        total += min(counts)
-    return total
+    return sum(
+        min(
+            sum((not X[m][i][key] == read.read[key]) for key in read.keys) 
+            for i in range(G.k)
+        )
+        for read in G.comp_reads[m]
+    )
 
 
 def make_solution(
@@ -51,7 +49,6 @@ def make_solution_RNA(
             end = max(X[start][0].keys())
             s_pos = RD.nodes[start].position
             e_pos = RD.nodes[end].position
-
             f.write(
                 f"BLOCK Start: {start + 1} Len: {len(X[start][0])} "
                 + f"Phased: {len(X[start][0])} Span: {e_pos - s_pos} "

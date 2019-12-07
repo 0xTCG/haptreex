@@ -14,8 +14,8 @@ class Gene:
     exon_starts: list[int]
     gene_id: str
     gene_type: str
+    
     ranges: list[tuple[int, int]]
-
     neighbors: set[int]
     snps: set[int]
 
@@ -60,19 +60,14 @@ class Gene:
         return self.name.__hash__()
 
 
-def gene_by_snp_dict(GG: dict[int, Gene]) -> dict[int, set[int]]:
-    s_dict = dict[int, set[int]]()
+def make_genomic_graph(GG: dict[int, Gene]):  # making neighbours
+    s_dict = dict[int, set[int]]() # snp to gene
     for g in GG.values():
         for s in g.snps:
             if s not in s_dict:
                 s_dict[s] = {g.index}
             else:
                 s_dict[s].add(g.index)
-    return s_dict
-
-
-def make_genomic_graph(GG: dict[int, Gene]):  # making neighbours
-    s_dict = gene_by_snp_dict(GG)  # snp to gene
     for x in GG:
         GG[x].neighbors = {y for s in g.snps for y in s_dict[s]}
 

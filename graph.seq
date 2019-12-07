@@ -3,17 +3,16 @@ from read import Read
 
 
 def mins_of_comps(comps: dict[int, list[int]]) -> list[int]:
-    mins = dict[int, int]()
-    for comp in comps.values():
-        mins[min(comp)] = 1
-    return sorted(mins.keys())
+    return list({min(comp) for comp in comp.values()}).sort()
 
 
 def build_comp(g, start: int) -> list[int]:
-    # builds connected component containing the node start
-    # returns ordered list of nodes in component
-    s = set([start])
-    old_batch = set([start])
+    """
+    builds connected component containing the node start
+    returns ordered list of nodes in component
+    """
+    s = {[start]}
+    old_batch = {[start]}
     while len(old_batch) > 0:
         new_batch = set(list[int]())
         for x in old_batch:
@@ -21,14 +20,15 @@ def build_comp(g, start: int) -> list[int]:
         new_batch = new_batch.difference(s)
         s.update(new_batch)
         old_batch = new_batch
-
     return sorted(list(s))
 
 
 def build_all_comps(g) -> tuple[dict[int, list[int]], dict[int, int]]:
-    # builds connected component dictionaries
-    # comps maps each node to a list of nodes it is connected to
-    # comps_dict maps each node to the smallest node it is connected to
+    """
+    builds connected component dictionaries
+    comps maps each node to a list of nodes it is connected to
+    comps_dict maps each node to the smallest node it is connected to
+    """
     comps = dict[int, list[int]]()
     comps_dict = dict[int, int]()
     unbuilt = set(g.nodekeys)
@@ -65,13 +65,11 @@ class Edge:
     nodes: tuple[Node, Node]
     k: int
     indices: tuple[int, int]
-    shapes: tuple[int, int]
-
+    
     def __init__(self: Edge, node_pair: tuple[Node], k: int):
         self.nodes = node_pair
         self.k = k
         self.indices = (node_pair[0].index, node_pair[1].index)
-        self.shapes = (node_pair[0].shape, node_pair[1].shape)
 
     def __eq__(self: Edge, other: Edge):
         return self.indices == other.indices
@@ -87,7 +85,7 @@ class Data:
      - read_list is list of reads
      - positions is the actual position on the genome (1-3bb) in base pair count
     """
-    data: dict[tuple[int, int], int]
+    # data: dict[tuple[int, int], int]
     states: dict[int, int]
     k: int
     error: float
@@ -96,9 +94,7 @@ class Data:
     names: dict[int, str]
     chroms: dict[int, str]
 
-    E: list[tuple[int, int]]
     nodekeys: list[int]
-    ADJ: dict[int, list[int]]
     nodes: dict[int, Node]
     edges: dict[tuple[int, int], Edge]
 
@@ -113,7 +109,7 @@ class Data:
         names: dict[int, str],
         chroms: dict[int, str]
     ):
-        self.data = data
+        # self.data = data
         self.states = states
         self.k = k
         self.error = error
@@ -122,48 +118,37 @@ class Data:
         self.names = names
         self.chroms = chroms
 
-        self.E = list(data.keys())
-        self.nodekeys = self.node_keys()
-        self.ADJ = self.adj()
-
-        d = dict[int, Node]()
-        for num in range(len(self.nodekeys)):
-            index = self.nodekeys[num]
-            d[index] = Node(
-                self.k,
-                index,
-                self.states[index],
-                self.ADJ[index],
-                self.positions[index],
-                self.names[index],
-                self.chroms[index],
-                num
-            )
-        self.nodes = d
-
-        N = self.nodes
-        d = dict[tuple[int, int], Edge]()
-        for e in self.E:
-            d[e] = Edge([N[e[0]], N[e[1]]], self.k)
-        self.edges = d
-
-    def node_keys(self: Data):
+        E = list(data.keys())
         # computes all nodes actually seen by reads
         s = set[int]()
         for e in self.E:
             s.add(e[0])
             s.add(e[1])
-        return sorted(list(s))
-
-    def adj(self: Data):
+        self.nodekeys = sorted(list(s))
         # returns dictionary mapping NODE to those nodes adjacent to NODE
-        d = dict[int, list[int]]()
+        adj = dict[int, list[int]]()
         for i in self.nodekeys:
-            d[i] = list[int]()
-        for e in self.E:
-            d[e[0]].append(e[1])
-            d[e[1]].append(e[0])
-        return d
+            adj[i] = list[int]()
+        for e in E:
+            adj[e[0]].append(e[1])
+            adj[e[1]].append(e[0])
+        return adj
+
+        self.nodes = dict[int, Node]()
+        for num in range(len(self.nodekeys)):
+            index = self.nodekeys[num]
+            self.nodes[index] = Node(
+                self.k,
+                index,
+                self.states[index],
+                adj[index],
+                self.positions[index],
+                self.names[index],
+                self.chroms[index],
+                num
+            )
+        self.edges = {e: Edge([self.nodes[e[0]], self.nodes[e[1]]], self.k) for e in E}
+        
 
 
 class Graph:
@@ -174,8 +159,6 @@ class Graph:
     comps_dict: dict[int, int]
     comp_mins: list[int]
 
-    POs: list[list[tuple[int, int]]]
-    OPs: dict[tuple[int, int], int]
     read_dict: dict[int, list[Read]]
     comp_reads: dict[int, list[Read]]
 
@@ -188,9 +171,6 @@ class Graph:
 
         self.components, self.comps_dict = build_all_comps(self)
         self.comp_mins = mins_of_comps(self.components)
-
-        self.POs = [[(0, 0)], [(0, 1), (1, 0)], [(1, 1)]]
-        self.OPs = {(0, 1): 0, (1, 0): 1}
         self.read_dict, self.comp_reads = self.make_read_dict()
 
     def __iter__(self: Graph):
@@ -198,8 +178,8 @@ class Graph:
 
     def make_read_dict(self) -> tuple[dict[int, list[Read]], dict[int, list[Read]]]:
         comp_reads = {m: list[Read]() for m in self.comp_mins}
-        read_dicts = {s: list[Read]() for s in self.nodekeys}
-        for r in self.read_list.values():
+        read_dicts = {s: list[Read]() for s in self.data.nodekeys}
+        for r in self.data.read_list.values():
             m = self.comps_dict[r.keys[0]]
             comp_reads[m].append(r)
             for key in r.keys[1:]:
@@ -208,14 +188,13 @@ class Graph:
 
 
 def edges_from_readlist(read_list: dict[int, Read]):
-    # returns dictionary with keys those edges that appear in G and values all 1
+    """
+    returns dictionary with keys those edges that appear in G and values all 1
+    """"
     d = dict[int, Read]()
     for zz in read_list:
-        r = read_list[zz]
-        seen_nodes = r.keys
-        pairs = list(combinations(seen_nodes, 2))
-        for pair in pairs:
+        seen_nodes = read_list[zz].keys
+        for pair in combinations(seen_nodes, 2):
             i, j = pair
-            pair = (i, j) if i < j else (j, i)
-            d[pair] = 1
+            d[(i, j) if i < j else (j, i)] = 1
     return d

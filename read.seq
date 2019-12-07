@@ -5,7 +5,6 @@ class Read:
     read: dict[int, int]
     count: int
     keys: list[int]
-    use: bool
     size: int
     read_num: int
     mini_reads: dict[int, dict[int, int]]
@@ -17,7 +16,6 @@ class Read:
         self.read = read
         self.count = count
         self.keys = sorted(self.read.keys())
-        self.use = True
         # self.genomic_region = None
         self.size = len(self.keys)
         self.read_num = read_num

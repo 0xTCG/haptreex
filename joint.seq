@@ -16,9 +16,8 @@ class JointGraph:
     short_comps_dict: dict[int, int]
     long_comp_mins: list[int]
     nodes: dict[int, MiniNode]
-    nodekeys: list[int]
+    # nodekeys: list[int]
 
-    weird_components: dict[int, list[int]]
     components: dict[int, list[int]]
     comp_mins: list[int]
     comps_dict: dict[int, int]
@@ -43,16 +42,31 @@ class JointGraph:
         # self.long_comps_dict = G.comps_dict
 
         self.nodes = self.organize_nodes()
-        self.nodekeys = sorted(self.nodes.keys())
+        # self.nodekeys = sorted(self.nodes.keys())
 
-        self.weird_components, _ = build_all_comps(self)
-
-        self.components, self.comp_mins, self.comps_dict = self.translate_components()
+        # translate components
+        weird_components, _ = build_all_comps(self)
+        self.components = dict[int, list[int]]()
+        self.comps_dict = dict[int, int]()
+        for c in weird_components:
+            temp_comp = set()
+            for C in self.weird_components[c]:
+                if C < self.Ls:
+                    for x in self.forward_short[C]:
+                        temp_comp.add(x)
+                else:
+                    for x in self.forward_long[C]:
+                        temp_comp.add(x)
+            comp = sorted(list(temp_comp))
+            m = min(comp)
+            for s in comp:
+                self.components[s] = comp
+                self.comps_dict[s] = m
         self.comp_mins = mins_of_comps(self.components)
         self.read_dict, self.comp_reads = self.make_read_dict()
 
     def organize_nodes(self: JointGraph) -> dict[int, MiniNode]:
-        nodes = {}
+        nodes = dict[int, MiniNode]()
         Ls = len(self.short_comp_mins)
         self.Ls = Ls
         Ll = len(self.long_comp_mins)
@@ -92,28 +106,7 @@ class JointGraph:
 
         return nodes
 
-    def translate_components(
-        self: JointGraph
-    ) -> tuple[dict[int, list[int]], list[int], dict[int, int]]:
-        comp_mins = list[int]()
-        components = dict[int, list[int]]()
-        comps_dict = dict[int, int]()
-        for c in self.weird_components:
-            temp_comp = set()
-            for C in self.weird_components[c]:
-                if C < self.Ls:
-                    for x in self.forward_short[C]:
-                        temp_comp.add(x)
-                else:
-                    for x in self.forward_long[C]:
-                        temp_comp.add(x)
-            comp = sorted(list(temp_comp))
-            m = min(comp)
-            comp_mins.append(m)
-            for s in comp:
-                components[s] = comp
-                comps_dict[s] = m
-        return components, sorted(comp_mins), comps_dict
+      
 
     def make_read_dict(
         self: JointGraph
