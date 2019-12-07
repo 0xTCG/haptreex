@@ -70,7 +70,7 @@ def make_solution_simple(
     outputname: str,
     name: str,
     vChroms: list[str],
-    vPositions: list[str],
+    vPositions: list[str]
 ):
     # writes phasing solution to outputname
     with open(f"{outputname}/{name}", "w") as f:

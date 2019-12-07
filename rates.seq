@@ -1,5 +1,5 @@
 from math import log, exp
-from common import choose
+from common import binom
 from read import Read, sample_from_reads
 
 
@@ -35,7 +35,7 @@ def forward(
     vec: dict[int, list[int]],
     i: int,
     rate: float,
-    p: float,
+    p: float
 ) -> float:
     if (X, i) in FD:
         return FD[X, i]
@@ -48,7 +48,7 @@ def forward(
             FD[1, 0] = 0
             return 0
         else:
-            val = choose(Y[0] + Y[1], Y[0]) * (p ** Y[0]) * (q ** Y[1])
+            val = binom(Y[0] + Y[1], Y[0]) * (p ** Y[0]) * (q ** Y[1])
             FD[0, 0] = 10 ** 10 * val
             return 10 ** 10 * val
     else:
@@ -62,7 +62,7 @@ def forward(
 
         SUM_log = log(trans(0, X, rate) * f0 + trans(1, X, rate) * f1)
         sample_prob_log = (Y[X] * log(p)) + (Y[1 - X] * log(q))
-        binom_log = log(choose(sum(Y), Y[0]))
+        binom_log = log(binom(sum(Y), Y[0]))
         f_val = exp(SUM_log + sample_prob_log + binom_log)
 
         if (X, i) not in FD:
@@ -76,7 +76,7 @@ def NW(vec: dict[int, list[int]], rate: float) -> float:
     dx = 0.001
     d = 1
 
-    def f(x):
+    def f(x, vec, rate):
         FD = dict[tuple[int, int], float]()
         return log(
             forward(FD, 0, vec, len(vec) - 1, rate, x)
@@ -86,8 +86,8 @@ def NW(vec: dict[int, list[int]], rate: float) -> float:
     def der(f, x: float, dx: float) -> float:
         return (f(x + dx) - f(x - dx)) / (2 * float(dx))
 
-    if f(0.501) == f(0.499):
-        if f(0.5) >= f(0.499):
+    if f(0.501, vec, rate) == f(0.499, vec, rate):
+        if f(0.5, vec, rate) >= f(0.499, vec, rate):
             return 0.5
         else:
             left = 0.5 + 0.001
@@ -113,6 +113,7 @@ def find_rates(snps: list[int], reads: list[Read], rate: float) -> dict[int, flo
     counts = get_counts(snps, reads)
     m = max(max(s) for s in counts.values())
 
+    r = 0.0
     if m == 0:
         raise ValueError(f"should not happen {snps} {reads}")
     elif m > lb_for_approx:

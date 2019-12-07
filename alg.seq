@@ -9,62 +9,50 @@ def read_val_tail(
     error: float,
     read_dict: dict[int, list[Read]],
     m: int,
-    m_prev: int,
+    m_prev: int
 ) -> float:
-    ## we extend a phasing and then calculating how likely that extension is
-    ## this looks at the prob of a particular phasing generating the set of reads which cover "end"
-    ## and for which "end" is not the smallest SNP in the read. (relevant reads for the extension)
-    ## this log prob gets added to the log prob of the non-extended phasing.
+    """
+    we extend a phasing and then calculating how likely that extension is
+    this looks at the prob of a particular phasing generating the set of reads 
+    which cover "end" and for which "end" is not the smallest SNP in the read. 
+    (relevant reads for the extension)
+    this log prob gets added to the log prob of the non-extended phasing.
+    """
 
     end = m
     k = 2
     a = (1 - error) / (1 - (2 * error / 3.0))
     b = (error / 3.0) / (1 - (2 * error / 3.0))
     relevant_reads = read_dict[end]
-    val = 0
-    val2 = 0
+    val, val2 = 0, 0
     for read_obj in relevant_reads:
-        probs = 0
-        probs2 = 0
+        probs, probs2 = 0, 0
         for strand in range(k):
             pp = partial_phase[strand]
             prob = (CONFIDENCE * read_obj.rates[strand]) + (0.5 * (1 - CONFIDENCE))
             mini_read = read_obj.mini_reads[end]
             for key in mini_read:
-                if mini_read[key] == pp[key]:
-                    prob = prob * a
-                else:
-                    prob = prob * b
-            if mini_read[end] == pp[end]:
-                probs2 += prob / a
-            else:
-                probs2 += prob / b
+                prob *= (a if mini_read[key] == pp[key] else b)
+            probs2 += prob / (a if mini_read[end] == pp[end] else b)
             probs += prob
-        probs = probs
         if probs == 0:
             val = -float("inf")
         else:
-            val += math.log(probs) * read_obj.count
+            val += log(probs) * read_obj.count
             if not end == read_obj.special_key:
-                val2 += math.log(probs2) * read_obj.count
+                val2 += log(probs2) * read_obj.count
 
     # p is some measure of likelihood of adjacent mutations occuring together
     # since we've know extended the haplotype we need to update the prior
     if len(partial_phase[0]) > 1:
-        pre_end = m_prev
-        q = 1 - p
-        if partial_phase[0][end] == partial_phase[0][pre_end]:
-            val += math.log(p)
-        else:
-            val += math.log(q)
-
+        val += log(p if partial_phase[0][end] == partial_phase[0][m_prev] else 1 - p)
     return val - val2
 
 
 def add_column_dict(
     m: int, l: dict[int, dict[int, int]], column: tuple[int, int]
 ) -> dict[int, dict[int, int]]:
-    # adds column to solution l
+    """adds column to solution l"""
     new = { 0: {key: l[0][key] for key in l[0]},
             1: {key: l[1][key] for key in l[1]} }
     for i in range(len(column)):
@@ -75,7 +63,7 @@ def add_column_dict(
 def temp_add_column_dict(
     m: int, l: dict[int, dict[int, int]], column: tuple[int, int]
 ) -> dict[int, dict[int, int]]:
-    # adds column to solution l (on exisiting solution)
+    """adds column to solution l (on exisiting solution)"""
     new = l
     for i in range(len(column)):
         new[i][m] = column[i]
@@ -87,16 +75,19 @@ def branch(
     m: int,
     m_prev: int,
     lists: list[dict[int, dict[int, int]]],
-    table: dict[int, Union[int, float]],
+    table: dict[int, float],
     threshold: float,
     p: float,
     error: float,
-    read_dict: dict[int, list[Read]],
+    read_dict: dict[int, list[Read]]
 ) -> tuple[list[dict[int, dict[int, int]]], dict[int, float]]:
-    # k=2 only
-    # branch all solutions to highly probable solutions on one additional SNP
-    # lists include all current solutions
-    # dict has list index of solutions and their likelihhods
+    """
+    k=2 only
+    branch all solutions to highly probable solutions on one additional SNP
+    lists include all current solutions
+    dict has list index of solutions and their likelihoods
+    """
+    
     columns = [(0, 1), (1, 0)]
     new_lists = list[dict[int, dict[int, int]]]()
     new_table = dict[int, float]()
@@ -118,6 +109,7 @@ def branch(
         for c in costs.keys():
             if new_costs[c] >= log(threshold / (1 - threshold)):
                 # adds extension with allele ordering c if sufficiently likely
+                likely_extended_partial_phase = dict[int, dict[int, int]]()
                 if used:  # can use the old dict once
                     likely_extended_partial_phase = add_column_dict(m, partial_phase, c)
                 else:  # need to make a copy of the dict
@@ -137,7 +129,7 @@ def prune(
     m: int,
     lists: list[dict[int, dict[int, int]]],
     table: dict[int, float],
-    components: dict[int, list[int]],
+    components: dict[int, list[int]]
 ) -> tuple[list[dict[int, dict[int, int]]], dict[int, float]]:
     # prune solutions based on number of solutions and thresholds
     n = max(components[m])
@@ -168,11 +160,6 @@ def prune(
             new_dict[count_list_index] = table[i]
             count_list_index += 1
     if go:
-        # output any of the most likely solutions
-        # to print all of the most likely solutions:
-        # for thing in new_lists:
-        #    print(tup_of_dict(thing))
-        # print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
         new_index = 0  # random.randint(0, len(new_lists)-1)
         new_lists = [new_lists[new_index]]
         new_dict = {0: new_dict[new_index]}
@@ -185,7 +172,7 @@ def RNA_solution(
     p: float,
     error: float,
     read_dict: dict[int, list[Read]],
-    components: dict[int, list[int]],
+    components: dict[int, list[int]]
 ) -> list[dict[int, dict[int, int]]]:
     # find phasing solution for connected component starting at start
     init = {0: dict[int, int](), 1: dict[int, int]()}
@@ -212,9 +199,9 @@ def RNA_phase(
     error: float,
     read_dict: dict[int, list[Read]],
     comp_mins: list[int],
-    components: dict[int, list[int]],
+    components: dict[int, list[int]]
 ):
     phases = dict[int, dict[int, dict[int, int]]]()
     for s in comp_mins:
-        phases[s] = RNA_solution(start, threshold, p, error, read_dict, components)[0]
+        phases[s] = RNA_solution(s, threshold, p, error, read_dict, components)[0]
     return phases

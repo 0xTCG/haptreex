@@ -1,5 +1,6 @@
-from graph import Node
-from gene import make_genomic_graph, assign_reads_to_genomic_regions
+from bisect import bisect_left
+from graph import Node, Data, edges_from_readlist
+from gene import Gene, make_genomic_graph, assign_reads_to_genomic_regions
 from read import Read
 from common import score
 from rates import find_rates
@@ -38,7 +39,7 @@ class RNAData:
     SNP_to_genomic_region: dict[int, int]
     genomic_region_to_SNPs: dict[int, list[int]]
     reads_by_GR: dict[str, list[Read]]
-    reads_by_indiv_gene: dict[int, dict[int, Read]]
+    reads_by_indiv_gene: dict[int, dict[int, list[Read]]]
     final: dict[int, list[int]]
     snps_to_use: dict[int, list[int]]
 
@@ -103,7 +104,7 @@ class RNAData:
                 self.positions[index],
                 self.names[index],
                 self.chroms[index],
-                num,
+                num
             )
             chrom_list[self.chroms[index]] = 0
         self.nodes = d
@@ -129,7 +130,7 @@ class RNAData:
             self.comps_mins_dict,
             self.SNP_to_genomic_region,
             self.genomic_region_to_SNPs,
-            self.reads_by_GR,
+            self.reads_by_GR
         ) = assign_reads_to_genomic_regions(self.genes, reads)
         self.reads_by_indiv_gene = self.assign_reads_to_indiv_genes()
 
@@ -165,11 +166,11 @@ class RNAData:
             position_to_SNP_index_dict[c][p] = S.index
         return position_to_SNP_index_dict
 
-    def assign_reads_to_indiv_genes(self: RNAData) -> dict[int, dict[int, Read]]:
-        D = {gr: dict[int, Read]() for gr in self.comps_mins_dict}
+    def assign_reads_to_indiv_genes(self: RNAData) -> dict[int, dict[int, list[Read]]]:
+        D = {gr: dict[int, list[Read]]() for gr in self.comps_mins_dict}
         for gr in self.comps_mins_dict:
             for g in self.comps[gr]:
-                D[gr][g] = list[]()
+                D[gr][g] = list[Read]()
                 snps = self.genes[g].snps
                 for r in self.reads_by_GR[gr]:
                     tf = True
@@ -262,7 +263,7 @@ class RNAData:
             all_counts[s] = counts
         return all_counts
 
-    def assign_LL_dif_to_snps(self: RNAData) -> dict[int, float]():
+    def assign_LL_dif_to_snps(self: RNAData) -> dict[int, float]:
         LL = dict[int, float]()
         for start in self.snps_to_use:
             for snp in self.snps_to_use[start]:
@@ -344,7 +345,7 @@ class RNAData:
             L = len(positions)
             PSdict = self.PSdict[g.chrom]
             nodekeys = self.nodekeys
-            h = bisect.bisect_left(positions, b)
+            h = bisect_left(positions, b)
             if h < L:
                 i = positions[h]
                 j = PSdict[i]
@@ -356,6 +357,6 @@ class RNAData:
 def make_data_from_RNA_data(RD: RNAData) -> Data:
     read_list = RD.long_read_list
     data = edges_from_readlist(read_list)
-    return DATA(
+    return Data(
         data, RD.states, RD.k, RD.error, read_list, RD.positions, RD.names, RD.chroms
     )

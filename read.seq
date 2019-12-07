@@ -10,7 +10,7 @@ class Read:
     read_num: int
     mini_reads: dict[int, dict[int, int]]
     special_key: int
-    rates: dict[int, float]()
+    rates: dict[int, float]
 
     ## for normal reads, the read_dict doesnt include starts of reads
     def __init__(self: Read, read: dict[int, int], count: int, read_num: int):
@@ -47,7 +47,7 @@ def sample_from_reads(reads: list[Read]) -> list[Read]:
         if read.size > 0:
             new_reads.append(read)
         else:
-            choice = random.choice(read.keys)
+            choice = choice(read.keys)
             new_read = Read({choice: read.read[choice]}, read.read_num)
             new_reads.append(new_read)
     return new_reads

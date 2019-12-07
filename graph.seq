@@ -1,6 +1,49 @@
 from itertools import combinations
 from read import Read
 
+
+def mins_of_comps(comps: dict[int, list[int]]) -> list[int]:
+    mins = dict[int, int]()
+    for comp in comps.values():
+        mins[min(comp)] = 1
+    return sorted(mins.keys())
+
+
+def build_comp(g, start: int) -> list[int]:
+    # builds connected component containing the node start
+    # returns ordered list of nodes in component
+    s = set([start])
+    old_batch = set([start])
+    while len(old_batch) > 0:
+        new_batch = set(list[int]())
+        for x in old_batch:
+            new_batch.update(set(g.nodes[x].neighbors))
+        new_batch = new_batch.difference(s)
+        s.update(new_batch)
+        old_batch = new_batch
+
+    return sorted(list(s))
+
+
+def build_all_comps(g) -> tuple[dict[int, list[int]], dict[int, int]]:
+    # builds connected component dictionaries
+    # comps maps each node to a list of nodes it is connected to
+    # comps_dict maps each node to the smallest node it is connected to
+    comps = dict[int, list[int]]()
+    comps_dict = dict[int, int]()
+    unbuilt = set(g.nodekeys)
+    while len(unbuilt) > 0:
+        start = unbuilt.pop()
+        s = build_comp(g, start)
+        comps[start] = s
+        comps_dict[start] = min(s)
+        unbuilt.difference_update(s)  # we build_comp once for each set of components
+        for key in s:  # and apply it to each nodekey
+            comps[key] = s
+            comps_dict[key] = comps_dict[start]
+    return comps, comps_dict
+
+
 class Node:
     k: int
     index: int
@@ -68,7 +111,7 @@ class Data:
         read_list: dict[int, Read],
         positions: dict[int, int],
         names: dict[int, str],
-        chroms: dict[int, str],
+        chroms: dict[int, str]
     ):
         self.data = data
         self.states = states
@@ -94,7 +137,7 @@ class Data:
                 self.positions[index],
                 self.names[index],
                 self.chroms[index],
-                num,
+                num
             )
         self.nodes = d
 
@@ -141,9 +184,9 @@ class Graph:
 
         self.data = data
         self.size = len(self.data.nodekeys)
-        print(f"{self.size} SNPs in non-trivial connected components")
+        print f"{self.size} SNPs in non-trivial connected components"
 
-        self.components, self.comps_dict = Graph.build_all_comps(self)
+        self.components, self.comps_dict = build_all_comps(self)
         self.comp_mins = mins_of_comps(self.components)
 
         self.POs = [[(0, 0)], [(0, 1), (1, 0)], [(1, 1)]]
@@ -163,39 +206,6 @@ class Graph:
                 read_dicts[key].append(r)
         return read_dicts, comp_reads
 
-    def build_all_comps[G](g: G) -> tuple[dict[int, list[int]], dict[int, int]]:
-        # builds connected component dictionaries
-        # comps maps each node to a list of nodes it is connected to
-        # comps_dict maps each node to the smallest node it is connected to
-        comps = dict[int, list[int]]()
-        comps_dict = dict[int, int]()
-        unbuilt = set(g.nodekeys)
-        while len(unbuilt) > 0:
-            start = unbuilt.pop()
-            s = build_comp(g, start)
-            comps[start] = s
-            comps_dict[start] = min(s)
-            unbuilt.difference_update(s)  # we build_comp once for each set of components
-            for key in s:  # and apply it to each nodekey
-                comps[key] = s
-                comps_dict[key] = comps_dict[start]
-        return comps, comps_dict
-
-    def build_comp[G](g: G, start: int) -> list[int]:
-        # builds connected component containing the node start
-        # returns ordered list of nodes in component
-        s = set([start])
-        old_batch = set([start])
-        while len(old_batch) > 0:
-            new_batch = set(list[int]())
-            for x in old_batch:
-                new_batch.update(set(g.nodes[x].neighbors))
-            new_batch = new_batch.difference(s)
-            s.update(new_batch)
-            old_batch = new_batch
-
-        return sorted(list(s))
-
 
 def edges_from_readlist(read_list: dict[int, Read]):
     # returns dictionary with keys those edges that appear in G and values all 1
@@ -209,12 +219,3 @@ def edges_from_readlist(read_list: dict[int, Read]):
             pair = (i, j) if i < j else (j, i)
             d[pair] = 1
     return d
-
-
-def mins_of_comps(comps: dict[int, list[int]]) -> list[int]:
-    mins = dict[int, int]()
-    for comp in comps.values():
-        mins[min(comp)] = 1
-    return sorted(mins.keys())
-
-

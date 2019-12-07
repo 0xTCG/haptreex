@@ -1,4 +1,4 @@
-from graph import Graph, mins_of_comps
+from graph import Graph, mins_of_comps, build_all_comps
 from read import Read
 from rna import RNAData
 
@@ -20,7 +20,7 @@ class JointGraph:
 
     weird_components: dict[int, list[int]]
     components: dict[int, list[int]]
-    comp_mins: list[int]()
+    comp_mins: list[int]
     comps_dict: dict[int, int]
     read_dict: dict[int, list[Read]]
     comp_reads: dict[int, list[Read]]
@@ -45,7 +45,7 @@ class JointGraph:
         self.nodes = self.organize_nodes()
         self.nodekeys = sorted(self.nodes.keys())
 
-        self.weird_components, _ = Graph.build_all_comps(self)
+        self.weird_components, _ = build_all_comps(self)
 
         self.components, self.comp_mins, self.comps_dict = self.translate_components()
         self.comp_mins = mins_of_comps(self.components)
@@ -76,16 +76,14 @@ class JointGraph:
             for lil_node in self.RD.components[self.short_comp_mins[i]]:
                 if lil_node in self.long_components:
                     temp_neighbors.add(back_long[self.long_comps_dict[lil_node]])
-
-            nodes[i] = mini_node(i, sorted(list(temp_neighbors)))
+            nodes[i] = MiniNode(i, sorted(list(temp_neighbors)))
 
         for i in range(Ls, Ll + Ls):
             temp_neighbors = set()
             for lil_node in self.long_components[self.long_comp_mins[i - Ls]]:
                 if lil_node in self.RD.components:
                     temp_neighbors.add(back_short[self.short_comps_dict[lil_node]])
-
-            nodes[i] = mini_node(i, sorted(list(temp_neighbors)))
+            nodes[i] = MiniNode(i, sorted(list(temp_neighbors)))
 
         self.forward_short = forward_short
         self.forward_long = forward_long
@@ -95,7 +93,7 @@ class JointGraph:
         return nodes
 
     def translate_components(
-        self: JointGraph,
+        self: JointGraph
     ) -> tuple[dict[int, list[int]], list[int], dict[int, int]]:
         comp_mins = list[int]()
         components = dict[int, list[int]]()

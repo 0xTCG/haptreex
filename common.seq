@@ -26,8 +26,11 @@ def binom(n: int, k: int) -> int:
 
 
 def score(pair: list[int]) -> float:
-    ##Computing probability that a fair coin generates something as or more
-    ##extremely biased than we we are seeing.
+    """
+    Computing probability that a fair coin generates something as or more
+    extremely biased than we we are seeing.
+    """
+    
     k = min(pair)
     var = 0 if pair[0] == k else 1
     p = 0.5

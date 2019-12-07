@@ -30,7 +30,7 @@ class Gene:
         exon_lengths: list[int],
         exon_starts: list[int],
         gene_id: str,
-        gene_type: str,
+        gene_type: str
     ):
         self.name = name
         self.transcript_id = name
@@ -153,7 +153,7 @@ def assign_reads_to_genomic_regions(
     dict[int, set[int]],
     dict[int, int],
     dict[int, list[int]],
-    dict[str, list[Read]],
+    dict[str, list[Read]]
 ]:
     comps, comps_dict = build_all_genomic_comps(genes)
     comps_mins_dict = gene_comps_by_mins(comps, comps_dict)

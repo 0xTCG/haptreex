@@ -9,8 +9,6 @@ import output
 import os
 import time
 import sys
-# import argparse
-# import subprocess
 
 # HapTree-X V1.0
 
@@ -42,33 +40,34 @@ import sys
 
 # args = parser.parse_args()
 
-RNAfragmat = sys.argv[1] # args.RNAfragmat
-DNAfragmat = sys.argv[2] # args.DNAfragmat
+vcf = sys.argv[1] #args.vcf
+RNAfragmat = sys.argv[2] # args.RNAfragmat
 gene_data = sys.argv[3] # args.gene_info
-vcf = sys.argv[4] #args.vcf
-outputname = sys.argv[5] #args.outputfolder
-isoforms = sys.argv[6] # args.isoforms
+outputname = sys.argv[4] #args.outputfolder
+DNAfragmat = "" #sys.argv[2] # args.DNAfragmat
+isoforms = "" #sys.argv[6] # args.isoforms
 
 time_start = time.time()
 
-#if vcf == None:
-#    raise ValueError("Error: vcf required")
+if vcf == "":
+   raise ValueError("Error: vcf required")
 
-# if RNAfragmat == None and DNAfragmat == None:
-#     sys.exit(
-#         "Error: at least one of RNAfragmat or DNAfragmat should be given. You can use Chair tool to generate them from SAM files."
-#     )
+if RNAfragmat == "" and DNAfragmat == "":
+    raise ValueError(
+        "Error: at least one of RNAfragmat or DNAfragmat should be given. "
+        + "You can use Chair tool to generate them from SAM files."
+    )
 
 RNAfragmats = [RNAfragmat]
 DNAfragmats = [DNAfragmat]
 
-if not os.path.exists(outputname):
-    os.system (f"mkdir -p {outputname}")
+# if not os.path.exists(outputname):
+os.system(f"mkdir -p {outputname}")
 pair_thresh = 0.7
 
 
 def make_golden_from_true2(
-    filename: str,
+    filename: str
 ) -> tuple[dict[int, dict[int, str]], list[str], list[str]]:
     f = open(filename, "r")
     a = f.readlines()
@@ -88,14 +87,14 @@ def make_golden_from_true2(
             d[0][j] = "."
             d[1][j] = "."
     return d, vChroms, vPositions
-print("Loading VCF file for scoring")
+print f"Loading VCF file {vcf} for scoring"
 V, vcfChroms, vcfPositions = make_golden_from_true2(vcf)
 
-if RNAfragmat == None or gene_data == None:
-    print("Missing RNAfragmat, running phasing without DASE")
-    if DNAfragmat == None:  # Only RNA data provided without gene info
+if RNAfragmat == "" or gene_data == "":
+    "Missing RNAfragmat, running phasing without DASE"
+    if DNAfragmat == "":  # Only RNA data provided without gene info
         D = datagen.make_data_from_fragmat(RNAfragmats, vcf, 0.02)
-        G = graph.easy_graph(D)
+        G = graph.Graph(D)
         GX = alg.RNA_phase(
             0.001, pair_thresh, 0.02, G.read_dict, G.comp_mins, G.components
         )
@@ -103,52 +102,53 @@ if RNAfragmat == None or gene_data == None:
             GX, G, outputname, "HapTreeX_noDASE_output.txt"
         )  # Running regular Haptree on 2-reads in the genome
     else:
-        if RNAfragmat != None:
+        if RNAfragmat != "":
             DNAfragmats = [DNAfragmat, RNAfragmat]
         D = datagen.make_data_from_fragmat(DNAfragmats, vcf, 0.02)
         time1 = time.time()
-        print(("Pt 1 took ", time1 - time_start))
-        G = graph.easy_graph(D)
+        print f"Pt 1 took {time1 - time_start}"
+        G = graph.Graph(D)
         time2 = time.time()
-        print(("Pt 2 took ", time2 - time1))
+        print f"Pt 2 took {time2 - time1}"
         GX = alg.RNA_phase(
             0.001, pair_thresh, 0.02, G.read_dict, G.comp_mins, G.components
         )
         time3 = time.time()
-        print(("Pt 3 took ", time3 - time2))
+        print f"Pt 3 took {time3 - time2}"
         output.make_solution(
             GX, G, outputname, "HapTreeX_noDASE_output.txt"
         )  # Running regular Haptree on 2-reads in the genome
         time4 = time.time()
-        print(("Pt 4 took ", time4 - time3))
-        print(("Total took ", time4 - time_start))
+        print f"Pt 4 took {time4 - time3}"
+        print f"Total took {time4 - time_start}"
 else:
     RD = datagen.make_RNA_data_from_fragmat(gene_data, RNAfragmats, vcf, 0.02, isoforms)
     time1 = time.time()
-    print(("Pt 1 took ", time1 - time_start))
+    print f"Pt 1 took {time1 - time_start}"
     stats.stats(RD, 2, 0.2, 0.6, 0, 2, 0.001, 0.2)
     times = time.time()
-    print(("stats took ", times - time1))
-    if DNAfragmat == None:
+    print f"stats took {times - time1}"
+    D = None
+    if DNAfragmat == "":
         D = rna.make_data_from_RNA_data(RD)
     else:
         D = datagen.make_data_from_fragmat(DNAfragmats, vcf, 0.02, RD.long_read_list)
-    G = graph.easy_graph(D)
-    jG = joint.joint_graph(RD, G)
+    G = graph.Graph(D)
+    jG = joint.JointGraph(RD, G)
     time2 = time.time()
-    print(("Pt 2 took ", time2 - times))
+    print f"Pt 2 took {time2 - times}"
     jGX = alg.RNA_phase(
         0.001, pair_thresh, 0.02, jG.read_dict, jG.comp_mins, jG.components
     )
     time3 = time.time()
-    print(("Pt 3 took ", time3 - time2))
+    print f"Pt 3 took {time3 - time2}"
     output.make_solution_simple(
         jGX,
         outputname,
         "HapTreeX_withDASE_output.txt",
         vcfChroms,
-        vcfPositions,
+        vcfPositions
     )  # Phasing using both 1-reads and 2-reads from DNAfragmat + RNAfragmat
     time4 = time.time()
-    print(("Pt 4 took ", time4 - time3))
-    print(("Total took ", time4 - time_start))
+    print f"Pt 4 took {time4 - time3}"
+    print f"Total took {time4 - time_start}"

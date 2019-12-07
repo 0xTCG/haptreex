@@ -13,7 +13,7 @@ def switches_comp_strand2(
     strand: int,
     sol: dict[int, dict[int, dict[int, int]]],
     gold: dict[int, dict[int, str]],
-    G: RNAData,
+    G: RNAData
 ) -> tuple[int, list[int]]:
     m = 0
     switches = list[int]()
@@ -29,7 +29,7 @@ def switches_in_comp2(
     start: int,
     sol: dict[int, dict[int, dict[int, int]]],
     gold: dict[int, dict[int, str]],
-    G: RNAData,
+    G: RNAData
 ) -> tuple[int, list[int]]:
     m0, switches0 = switches_comp_strand2(start, 0, sol, gold, G)
     m1, switches1 = switches_comp_strand2(start, 1, sol, gold, G)
@@ -73,67 +73,67 @@ def stats(
     rate_dep_cutoff: int,
     cutoff: float,
     conf: float,
-    show: bool = False,
+    show: bool = False
 ):
     ### all of these current_STU* filter the set of SNPs we are going to try to phase
     current_STU0 = RD.snps_to_use
     print("Original RD SNP dictionary size: ", len(current_STU0), num_SNP(current_STU0))
-    current_STU1 = RD_updates.update_snps_to_use_rate(RD, current_STU0, rate_cutoff)
+    current_STU1 = update_snps_to_use_rate(RD, current_STU0, rate_cutoff)
     print(
         "STU1(rate_cutoff) RD SNP dictionary size: ",
         len(current_STU1),
-        num_SNP(current_STU1),
+        num_SNP(current_STU1)
     )
-    current_STU2 = RD_updates.update_snps_to_use_coverage(
+    current_STU2 = update_snps_to_use_coverage(
         RD, current_STU1, coverage_cutoff
     )
     print(
         "STU2(coverage_cutoff) RD SNP dictionary size: ",
         len(current_STU2),
-        num_SNP(current_STU2),
+        num_SNP(current_STU2)
     )
-    current_STU3 = RD_updates.update_snps_to_use_size_cluster(
+    current_STU3 = update_snps_to_use_size_cluster(
         RD, current_STU2, size_factor
     )
     print(
         "STU3(size_factor) RD SNP dictionary size: ",
         len(current_STU3),
-        num_SNP(current_STU3),
+        num_SNP(current_STU3)
     )
-    current_STU4 = RD_updates.update_snps_to_use_rate_dependent_cutoff(
+    current_STU4 = update_snps_to_use_rate_dependent_cutoff(
         RD, current_STU3, rate_dep_cutoff, conf
     )
     print(
         "STU4(rate_dep_cutoff,conf) RD SNP dictionary size: ",
         len(current_STU4),
-        num_SNP(current_STU4),
+        num_SNP(current_STU4)
     )
     #    print current_STU4
-    current_STU5 = RD_updates.update_snps_to_use_cutoff(RD, current_STU4, cutoff)
+    current_STU5 = update_snps_to_use_cutoff(RD, current_STU4, cutoff)
     print(
         "STU5(cutoff) RD SNP dictionary size: ",
         len(current_STU5),
-        num_SNP(current_STU5),
+        num_SNP(current_STU5)
     )
     #    print current_STU5
-    current_STU6 = RD_updates.update_snps_to_use_rate_cluster(
+    current_STU6 = update_snps_to_use_rate_cluster(
         RD, current_STU5, rate_factor
     )
     print(
         "STU6(rate_factor) RD SNP dictionary size: ",
         len(current_STU6),
-        num_SNP(current_STU6),
+        num_SNP(current_STU6)
     )
     #    print current_STU6
 
     RD.make_components(current_STU6)
-    X = alg.RNA_phase(
+    X = RNA_phase(
         0.0001,
-        common.pair_thresh,
+        common.PAIR_TRESH,
         RD.error,
         RD.read_dict,
         RD.comp_mins,
-        RD.components,
+        RD.components
     )
     S = [switches_in_comp2(x, X, common.V, RD)[0] for x in X]
     # print sum(S), len(RD.components), len(X)
