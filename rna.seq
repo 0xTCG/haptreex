@@ -6,11 +6,6 @@ from common import score
 from rates import find_rates
 
 
-def in_range(S: Node, r: tuple[int, int]) -> tuple[bool, bool]:
-    p = S.position
-    return (p >= r[0], p < r[1])
-
-
 class RNAData:
     states: dict[int, int]
     # initial_genes: dict[int, Gene]
@@ -20,7 +15,7 @@ class RNAData:
     positions: dict[int, int]
     names: dict[int, str]
     chroms: dict[int, str]
-    # isodict: dict[str, list[float, str]]
+    isodict: dict[str, tuple[float, str]]
     k: int
 
     read_list: dict[int, Read]
@@ -37,14 +32,14 @@ class RNAData:
     comps_mins_dict: dict[int, set[int]]
     SNP_to_genomic_region: dict[int, int]
     genomic_region_to_SNPs: dict[int, list[int]]
-    reads_by_GR: dict[str, list[Read]]
+    reads_by_GR: dict[int, list[Read]]
     # reads_by_indiv_gene: dict[int, dict[int, list[Read]]]
     # final: dict[int, list[int]]
     snps_to_use: dict[int, list[int]]
 
     reads_by_comsnps: dict[int, list[Read]]
-    read_dict: dict[Read, list[Read]]
-    counts: dict[Read, list[int]]
+    read_dict: dict[int, list[Read]]
+    counts: dict[int, list[int]]
     LLsnp: dict[int, float]
     rates: dict[int, dict[int, float]]
 
@@ -62,7 +57,7 @@ class RNAData:
         positions: dict[int, int],
         names: dict[int, str],
         chroms: dict[int, str],
-        isodict: dict[str, list[float, str]]
+        isodict: dict[str, tuple[float, str]]
     ):
         self.k = 2
         self.states = states
@@ -73,7 +68,7 @@ class RNAData:
         self.positions = positions
         self.names = names
         self.chroms = chroms
-        # self.isodict = isodict
+        self.isodict = isodict
 
         short_read_list = dict[int, Read]()
         long_read_list = dict[int, Read]()
@@ -115,7 +110,6 @@ class RNAData:
 
         ######################################################################
 
-        print("running through genes...")
         for g in self.genes:
             self.find_SNPs(self.genes[g])
         make_genomic_graph(self.genes)
@@ -161,7 +155,7 @@ class RNAData:
         for s in self.nodekeys:
             S = self.nodes[s]
             c = S.chrom
-            p = S.position
+            p = S.pos
             position_to_SNP_index_dict[c][p] = S.index
         return position_to_SNP_index_dict
 
@@ -219,8 +213,8 @@ class RNAData:
                     reads_by_comsnps[start].append(r)
         return reads_by_comsnps
 
-    def make_read_dict(self: RNAData) -> dict[Read, list[Read]]:
-        read_dicts = dict[Read, list[Read]]()
+    def make_read_dict(self: RNAData) -> dict[int, list[Read]]:
+        read_dicts = dict[int, list[Read]]()
         for m in self.reads_by_comsnps:
             for r in self.reads_by_comsnps[m]:
                 if len(r.keys) == 1:
@@ -238,9 +232,9 @@ class RNAData:
                             read_dicts[k] = [new_read]
         return read_dicts
 
-    def assign_counts_to_indiv_snps(self: RNAData) -> dict[Read, list[int]]:
+    def assign_counts_to_indiv_snps(self: RNAData) -> dict[int, list[int]]:
         ###ASSUMES 1READS ONLY #1reads
-        all_counts = dict[Read, list[int]]()
+        all_counts = dict[int, list[int]]()
         for s in self.read_dict:
             counts = [0, 0]
             for r in self.read_dict[s]:
@@ -296,7 +290,7 @@ class RNAData:
             S = self.nodes[s]
             num = S.num
             ALL_SNPS = list[Node]()
-            while S.position < g.bp_end:
+            while S.pos < g.bp_end:
                 ALL_SNPS.append(S)
                 num += 1
                 if num < len(self.nodekeys):
@@ -311,7 +305,7 @@ class RNAData:
             while s_i < L:
                 S = ALL_SNPS[s_i]
                 r = g.ranges[r_i]
-                tf = in_range(S, r)
+                tf = (S.pos >= r[0], S.pos < r[1])
                 if tf[0] and tf[1]:
                     snps[r_i].append(S)
                     s_i += 1

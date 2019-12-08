@@ -1,4 +1,4 @@
-from math import log, exp
+from math import log, exp, pow
 from common import binom
 from read import Read, sample_from_reads
 
@@ -45,49 +45,50 @@ def forward(
     if i == 0:
         Y = vec[i]
         if X == 1:
-            FD[1, 0] = 0
-            return 0
+            FD[1, 0] = 0.0
+            return 0.0
         else:
             val = binom(Y[0] + Y[1], Y[0]) * (p ** Y[0]) * (q ** Y[1])
-            FD[0, 0] = 10 ** 10 * val
-            return 10 ** 10 * val
+            FD[0, 0] = pow(10.0, 10.0) * val
+            return pow(10.0, 10.0) * val
     else:
         Y = vec[i]
         f0 = forward(FD, 0, vec, i - 1, rate, p)
         f1 = forward(FD, 1, vec, i - 1, rate, p)
         if (0, i - 1) not in FD:
-            FD[0, i - 1] = (10 ** 10) * f0
+            FD[0, i - 1] = pow(10.0, 10.0) * f0
         if (1, i - 1) not in FD:
-            FD[1, i - 1] = (10 ** 10) * f1
+            FD[1, i - 1] = pow(10.0, 10.0) * f1
 
         SUM_log = log(trans(0, X, rate) * f0 + trans(1, X, rate) * f1)
         sample_prob_log = (Y[X] * log(p)) + (Y[1 - X] * log(q))
-        binom_log = log(binom(sum(Y), Y[0]))
+        binom_log = log(float(binom(sum(Y), Y[0])))
         f_val = exp(SUM_log + sample_prob_log + binom_log)
 
         if (X, i) not in FD:
-            FD[X, i] = 10 ** 10 * f_val
-        return 10 ** 10 * f_val
+            FD[X, i] = pow(10.0, 10.0) * f_val
+        return pow(10.0, 10.0) * f_val
 
 
 def NW(vec: dict[int, list[int]], rate: float) -> float:
     left = 0.001
     right = 1 - left
     dx = 0.001
-    d = 1
+    d = 1.0
 
-    def f(x, vec, rate):
+    def f(x: float, vec: dict[int, list[int]], rate: float):
         FD = dict[tuple[int, int], float]()
         return log(
             forward(FD, 0, vec, len(vec) - 1, rate, x)
             + forward(FD, 1, vec, len(vec) - 1, rate, x)
         )
+    f = f(..., vec, rate)
 
     def der(f, x: float, dx: float) -> float:
         return (f(x + dx) - f(x - dx)) / (2 * float(dx))
 
-    if f(0.501, vec, rate) == f(0.499, vec, rate):
-        if f(0.5, vec, rate) >= f(0.499, vec, rate):
+    if f(0.501) == f(0.499):
+        if f(0.5) >= f(0.499):
             return 0.5
         else:
             left = 0.5 + 0.001

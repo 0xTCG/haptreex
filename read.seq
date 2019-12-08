@@ -29,6 +29,9 @@ class Read:
     def __len__(self: Read):
         return len(self.read)
 
+    def __str__(self: Read):
+        return f'Read.{self.read}'
+
     def make_mini_reads(self: Read) -> dict[int, dict[int, int]]:
         mini_read_dict = dict[int, dict[int, int]]()
         mini_read = copy(self.read)
@@ -46,6 +49,6 @@ def sample_from_reads(reads: list[Read]) -> list[Read]:
             new_reads.append(read)
         else:
             choice = choice(read.keys)
-            new_read = Read({choice: read.read[choice]}, read.read_num)
+            new_read = Read({choice: read.read[choice]}, 1, read.read_num)
             new_reads.append(new_read)
     return new_reads

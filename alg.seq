@@ -1,6 +1,6 @@
 from math import log
 from read import Read
-from common import CONFIDENCE
+from common import CONFIDENCE, Pair
 
 
 def read_val_tail(
@@ -24,9 +24,9 @@ def read_val_tail(
     a = (1 - error) / (1 - (2 * error / 3.0))
     b = (error / 3.0) / (1 - (2 * error / 3.0))
     relevant_reads = read_dict[end]
-    val, val2 = 0, 0
+    val, val2 = 0.0, 0.0 
     for read_obj in relevant_reads:
-        probs, probs2 = 0, 0
+        probs, probs2 = 0.0, 0.0
         for strand in range(k):
             pp = partial_phase[strand]
             prob = (CONFIDENCE * read_obj.rates[strand]) + (0.5 * (1 - CONFIDENCE))
@@ -50,7 +50,7 @@ def read_val_tail(
 
 
 def add_column_dict(
-    m: int, l: dict[int, dict[int, int]], column: tuple[int, int]
+    m: int, l: dict[int, dict[int, int]], column: Pair[int]
 ) -> dict[int, dict[int, int]]:
     """adds column to solution l"""
     new = { 0: {key: l[0][key] for key in l[0]},
@@ -61,7 +61,7 @@ def add_column_dict(
 
 
 def temp_add_column_dict(
-    m: int, l: dict[int, dict[int, int]], column: tuple[int, int]
+    m: int, l: dict[int, dict[int, int]], column: Pair[int]
 ) -> dict[int, dict[int, int]]:
     """adds column to solution l (on exisiting solution)"""
     new = l
@@ -88,15 +88,15 @@ def branch(
     dict has list index of solutions and their likelihoods
     """
     
-    columns = [(0, 1), (1, 0)]
+    columns = [Pair(0, 1), Pair(1, 0)]
     new_lists = list[dict[int, dict[int, int]]]()
     new_table = dict[int, float]()
     count_list_index = 0  # counter for length of new_lists
     for i in range(len(lists)):
         partial_phase = lists[i]
         # extend solution
-        costs = {c: 0 for c in columns}
-        corrections = {c: 0 for c in columns}
+        costs = {c: 0.0 for c in columns}
+        corrections = {c: 0.0 for c in columns}
 
         for c in columns:
             # adding possible orderings of alleles for new SNP for diploid
@@ -140,7 +140,7 @@ def prune(
     go = False
     threshold = 1.0
     if m == n:
-        threshold = 1
+        threshold = 1.0
         go = True
     elif L > 1000:
         threshold = 0.1
@@ -179,7 +179,7 @@ def RNA_phase(
         # find phasing solution for connected component starting at start
         init = {0: dict[int, int](), 1: dict[int, int]()}
         lists = [init]
-        table = {0: 0}
+        table = {0: 0.0}
         skipped = True  # set to True to allow allele permutations
         m_prev = -1 # SEQ/TODO: check! originally  None
         for m in components[start]:
@@ -189,7 +189,7 @@ def RNA_phase(
             else:  # specify beginning to remove allele permutations
                 init = {0: {m: 0}, 1: {m: 1}}
                 lists = [init]
-                table = {0: 0}
+                table = {0: 0.0}
                 skipped = True
             m_prev = m
         phases[start] = lists[0]

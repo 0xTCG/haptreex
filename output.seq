@@ -4,13 +4,15 @@ from rna import RNAData
 
 def comp_MEC(m: int, X: dict[int, dict[int, dict[int, int]]], G: Graph) -> int:
     # computes MEC score of component containing node m
-    return sum(
-        min(
-            sum((not X[m][i][key] == read.read[key]) for key in read.keys) 
-            for i in range(G.k)
-        )
-        for read in G.comp_reads[m]
-    )
+    total = 0
+    for read in G.comp_reads[m]:
+        counts = [0] * G.data.k
+        for key in read.keys:
+            for i in range(G.data.k):
+                if not X[m][i][key] == read.read[key]:
+                    counts[i] +=1
+        total += min(counts)
+    return total
 
 
 def make_solution(
@@ -22,8 +24,8 @@ def make_solution(
     # writes phasing solution to outputname
     with open(f"{outputname}/{name}", "w") as f:
         for start in G.comp_mins:
-            s_pos = G.nodes[start].position
-            e_pos = G.nodes[G.components[start][-1]].position
+            s_pos = G.data.nodes[start].pos
+            e_pos = G.data.nodes[G.components[start][-1]].pos
             f.write(
                 f"BLOCK Start: {start + 1} Len: {len(G.components[start])} "
                 + f"Phased: {len(G.components[start])} Span: {e_pos - s_pos} "
@@ -31,8 +33,8 @@ def make_solution(
             )
             for i in G.components[start]:
                 f.write(
-                    f"{i+1}\t{X[start][0][i]}\t{X[start][1][i]}\t{G.nodes[i].chrom}\t"
-                    + f"{G.nodes[i].position}\t\n"
+                    f"{i+1}\t{X[start][0][i]}\t{X[start][1][i]}\t{G.data.nodes[i].chrom}\t"
+                    + f"{G.data.nodes[i].pos}\t\n"
                 )
             f.write("*****\n")
 
@@ -47,8 +49,8 @@ def make_solution_RNA(
     with open(f"{outputname}/{name}", "w") as f:
         for start in X:
             end = max(X[start][0].keys())
-            s_pos = RD.nodes[start].position
-            e_pos = RD.nodes[end].position
+            s_pos = RD.data.nodes[start].pos
+            e_pos = RD.data.nodes[end].pos
             f.write(
                 f"BLOCK Start: {start + 1} Len: {len(X[start][0])} "
                 + f"Phased: {len(X[start][0])} Span: {e_pos - s_pos} "
@@ -57,7 +59,7 @@ def make_solution_RNA(
             for i in X[start][0]:
                 f.write(
                     f"{i+1}\t{X[start][0][i]}\t{X[start][1][i]}\t" +
-                    f"{RD.G.nodes[i].chrom}\t{RD.G.nodes[i].position}\t\n"
+                    f"{RD.G.data.nodes[i].chrom}\t{RD.G.data.nodes[i].pos}\t\n"
                 )
             f.write("*****\n")
 

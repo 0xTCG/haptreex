@@ -10,6 +10,24 @@ DOT = -10 # "."
 V = dict[int, dict[int, int]]()
 
 
+class Pair[T]:
+    x: T
+    y: T
+    def __getitem__(self: Pair[T], i: int):
+        return self.x if i == 0 else self.y
+    def __hash__(self: Pair[T]):
+        return (self.x, self.y).__hash__()
+    def __eq__(self: Pair[T], other: Pair[T]):
+        return (self.x, self.y) == (other.x, other.y)
+    def __ne__(self: Pair[T], other: Pair[T]):
+        return (self.x, self.y) == (other.x, other.y)
+    def __len__(self: Pair[T]):
+        return 2
+    def __str__(self: Pair[T]):
+        return (self.x, self.y).__str__()
+    #def __getitem__(self: Pair[T], i: int):
+    #    return self.x if i == 0 else self.y
+
 def cdf(n: int, k: int, var: int) -> float:
     p = 0.5
     mu = n * p if var == 0 else n * (1 - p)
@@ -53,7 +71,7 @@ def score(pair: list[int]) -> float:
     if n > 50:
         return cdf(n, k, var)
     else:
-        prob = 0
+        prob = 0.0
         for i in range(k + 1):
             if var == 0:
                 prob += (p ** i) * ((1 - p) ** (n - i)) * binom(n, i)

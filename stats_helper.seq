@@ -11,7 +11,7 @@ def clusters_size(
 ) -> list[list[int]]:
     tmp_dict = dict[int, float]()
     for s in snps:
-        tmp_dict[s] = sum(counts[s])
+        tmp_dict[s] = float(sum(counts[s]))
 
     order = sorted(tmp_dict.items(), key=sort_key)
     clusters = [[order[0][0]]]
@@ -51,12 +51,12 @@ def clusters_rate(
 
 
 def new_score(pair: list[int], rates: dict[int, float], conf: float) -> float:
-    r = min(rates.values())
+    r = float(min(rates.values()))
     r = max(r, 0.05)
     r = conf * r + 0.5 * (1 - conf)
     k = min(pair)
     n = sum(pair)
-    return max((-1) * (n - 2 * k) * log(r / (1 - r)), log(2))
+    return max((-1) * (n - 2 * k) * log(r / (1 - r)), log(2.0))
 
 
 def update_snps_to_use_size_cluster(

@@ -3,7 +3,7 @@ from read import Read
 
 
 def mins_of_comps(comps: dict[int, list[int]]) -> list[int]:
-    return list({min(comp) for comp in comps.values()}).sort()
+    return sorted(list({min(comp) for comp in comps.values()}))
 
 
 def build_comp(g, start: int) -> list[int]:
@@ -11,10 +11,13 @@ def build_comp(g, start: int) -> list[int]:
     builds connected component containing the node start
     returns ordered list of nodes in component
     """
-    s, old_batch = {[start]}, {[start]}
+    s, old_batch = {start}, {start}
     while len(old_batch) > 0:
-        new_batch = {y for x in old_batch for y in g.nodes[x].neighbors}
-        new_batch = new_batch.difference(s)
+        # new_batch = {y for x in old_batch for y in g.nodes[x]}
+        new_batch = set[int]()
+        for x in old_batch:
+            new_batch |= set(g.nodes[x].neighbors)
+        new_batch -= s
         s.update(new_batch)
         old_batch = new_batch
     return sorted(list(s))
@@ -28,13 +31,13 @@ def build_all_comps(g) -> tuple[dict[int, list[int]], dict[int, int]]:
     """
     comps = dict[int, list[int]]()
     comps_dict = dict[int, int]()
-    unbuilt = set(g.data.nodekeys)
+    unbuilt = set(g.nodekeys)
     while len(unbuilt) > 0:
         start = unbuilt.pop()
         s = build_comp(g, start)
         comps[start] = s
         comps_dict[start] = min(s)
-        unbuilt.difference_update(s)  # we build_comp once for each set of components
+        unbuilt -= set(s)  # we build_comp once for each set of components
         for key in s:  # and apply it to each nodekey
             comps[key] = s
             comps_dict[key] = comps_dict[start]
@@ -146,6 +149,8 @@ class Graph:
     data: Data
     size: int
 
+    nodekeys: list[int]
+    nodes: dict[int, Node]
     components: dict[int, list[int]]
     comps_dict: dict[int, int]
     comp_mins: list[int]
@@ -160,6 +165,8 @@ class Graph:
         self.size = len(self.data.nodekeys)
         print f"{self.size} SNPs in non-trivial connected components"
 
+        self.nodekeys = self.data.nodekeys
+        self.nodes = self.data.nodes
         self.components, self.comps_dict = build_all_comps(self)
         self.comp_mins = mins_of_comps(self.components)
         self.read_dict, self.comp_reads = self.make_read_dict()

@@ -124,7 +124,7 @@ if RNAfragmat == "" or gene_data == "":
 else:
     RD = datagen.make_RNA_data_from_fragmat(gene_data, RNAfragmats, vcf, 0.02, isoforms)
     time1 = time.time()
-    print f"Pt 1 took {time1 - time_start}"
+    print f"Pt 1 took", time1 - time_start
     stats.stats(RD, 2, 0.2, 0.6, 0, 2, 0.001, 0.2)
     times = time.time()
     print f"stats took {times - time1}"

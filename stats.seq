@@ -12,13 +12,13 @@ def switches_comp_strand2(
     start: int,
     strand: int,
     sol: dict[int, dict[int, dict[int, int]]],
-    gold: dict[int, dict[int, str]],
+    gold: dict[int, dict[int, int]],
     G: RNAData
 ) -> tuple[int, list[int]]:
     m = 0
     switches = list[int]()
     for i in G.components[start]:
-        if sol[start][strand][i] != gold[0][i] and gold[0][i] != ".":
+        if sol[start][strand][i] != gold[0][i] and gold[0][i] != common.DOT:
             switches.append(i)
             m += 1
             strand = 1 - strand
@@ -28,7 +28,7 @@ def switches_comp_strand2(
 def switches_in_comp2(
     start: int,
     sol: dict[int, dict[int, dict[int, int]]],
-    gold: dict[int, dict[int, str]],
+    gold: dict[int, dict[int, int]],
     G: RNAData
 ) -> tuple[int, list[int]]:
     m0, switches0 = switches_comp_strand2(start, 0, sol, gold, G)
@@ -40,21 +40,21 @@ def switches_in_comp2(
 
 
 def con_dis_non(
-    X: dict[int, dict[int, dict[int, int]]], V: dict[int, dict[int, str]]
+    X: dict[int, dict[int, dict[int, int]]], V: dict[int, dict[int, int]]
 ) -> tuple[dict[int, dict[str, int]], list[int]]:
     counts = dict[int, dict[str, int]]()  # {x:{} for x in X}
     for x in X:
-        countsx = {0: 0, "n": 0, 1: 0}
+        countsx = {0: 0, -1: 0, 1: 0}
         for y in X[x][0]:
             if V[0][y] == common.DOT:
-                countsx["n"] += 1
+                countsx[-1] += 1
             else:
                 if V[0][y] == X[x][0][y]:
                     countsx[0] += 1
                 else:
                     countsx[1] += 1
         m, M = sorted([countsx[0], countsx[1]])
-        n = countsx["n"]
+        n = countsx[-1]
         counts[x] = {"c": M, "n": n, "d": m}
     totals_con = sum([counts[x]["c"] for x in X])
     totals_dis = sum([counts[x]["d"] for x in X])
@@ -77,55 +77,20 @@ def stats(
 ):
     ### all of these current_STU* filter the set of SNPs we are going to try to phase
     current_STU0 = RD.snps_to_use
-    print("Original RD SNP dictionary size: ", len(current_STU0), num_SNP(current_STU0))
+    print f"Original RD SNP dictionary size: {len(current_STU0)} {num_SNP(current_STU0)}"
     current_STU1 = update_snps_to_use_rate(RD, current_STU0, rate_cutoff)
-    print(
-        "STU1(rate_cutoff) RD SNP dictionary size: ",
-        len(current_STU1),
-        num_SNP(current_STU1)
-    )
-    current_STU2 = update_snps_to_use_coverage(
-        RD, current_STU1, coverage_cutoff
-    )
-    print(
-        "STU2(coverage_cutoff) RD SNP dictionary size: ",
-        len(current_STU2),
-        num_SNP(current_STU2)
-    )
-    current_STU3 = update_snps_to_use_size_cluster(
-        RD, current_STU2, size_factor
-    )
-    print(
-        "STU3(size_factor) RD SNP dictionary size: ",
-        len(current_STU3),
-        num_SNP(current_STU3)
-    )
-    current_STU4 = update_snps_to_use_rate_dependent_cutoff(
-        RD, current_STU3, rate_dep_cutoff, conf
-    )
-    print(
-        "STU4(rate_dep_cutoff,conf) RD SNP dictionary size: ",
-        len(current_STU4),
-        num_SNP(current_STU4)
-    )
-    #    print current_STU4
+    print f"STU1(rate_cutoff) RD SNP size: {len(current_STU1)} {num_SNP(current_STU1)}"
+    current_STU2 = update_snps_to_use_coverage(RD, current_STU1, coverage_cutoff)
+    print f"STU2(coverage_cutoff) RD SNP size: {len(current_STU2)} {num_SNP(current_STU2)}"
+    current_STU3 = update_snps_to_use_size_cluster(RD, current_STU2, size_factor)
+    print f"STU3(size_factor) RD SNP size: {len(current_STU3)} {num_SNP(current_STU3)}"
+    current_STU4 = update_snps_to_use_rate_dependent_cutoff(RD, current_STU3, rate_dep_cutoff, conf)
+    print f"STU4(rate_dep_cutoff,conf) RD SNP size: {len(current_STU4)} {num_SNP(current_STU4)}"
     current_STU5 = update_snps_to_use_cutoff(RD, current_STU4, cutoff)
-    print(
-        "STU5(cutoff) RD SNP dictionary size: ",
-        len(current_STU5),
-        num_SNP(current_STU5)
-    )
-    #    print current_STU5
-    current_STU6 = update_snps_to_use_rate_cluster(
-        RD, current_STU5, rate_factor
-    )
-    print(
-        "STU6(rate_factor) RD SNP dictionary size: ",
-        len(current_STU6),
-        num_SNP(current_STU6)
-    )
-    #    print current_STU6
-
+    print f"STU5(cutoff) RD SNP size: {len(current_STU5)} {num_SNP(current_STU5)}"
+    current_STU6 = update_snps_to_use_rate_cluster(RD, current_STU5, rate_factor)
+    print f"STU6(rate_factor) RD SNP size: {len(current_STU6)} {num_SNP(current_STU6)}"
+    
     RD.make_components(current_STU6)
     X = RNA_phase(
         0.0001,
@@ -136,13 +101,12 @@ def stats(
         RD.components
     )
     S = [switches_in_comp2(x, X, common.V, RD)[0] for x in X]
-    # print sum(S), len(RD.components), len(X)
     if len(RD.components) == 0:
-        print(
-            "Warning: No fragments covering only 1 SNPs were found in the RNAfragmat "
-            + "input.\nHapTree-X will not consider differential allele-specific "
-            + "expression (DASE) during phasing.\nIf you would like to use DASE as "
-            + "well, please run chair with parameter 1"
+        print (
+            f"Warning: No fragments covering only 1 SNPs were found in the RNAfragmat "
+            + f"input.\nHapTree-X will not consider differential allele-specific "
+            + f"expression (DASE) during phasing.\nIf you would like to use DASE as "
+            + f"well, please run chair with parameter 1"
         )
 
     C = con_dis_non(X, common.V)[1]
