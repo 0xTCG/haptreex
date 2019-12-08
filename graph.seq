@@ -28,7 +28,7 @@ def build_all_comps(g) -> tuple[dict[int, list[int]], dict[int, int]]:
     """
     comps = dict[int, list[int]]()
     comps_dict = dict[int, int]()
-    unbuilt = set(g.nodekeys)
+    unbuilt = set(g.data.nodekeys)
     while len(unbuilt) > 0:
         start = unbuilt.pop()
         s = build_comp(g, start)
@@ -136,9 +136,10 @@ class Data:
                 self.chroms[index],
                 num
             )
-        edges = dict[tuple[int, int], Edge]() # TODO
-        for e in data:
-            edges[e] = Edge((self.nodes[e[0]], self.nodes[e[1]]), self.k) 
+        self.edges = {
+            e: Edge((self.nodes[e[0]], self.nodes[e[1]]), self.k) 
+            for e in data
+        }
 
 
 class Graph:
