@@ -3,27 +3,21 @@ from read import Read
 from rna import RNAData
 from graph import Data, edges_from_readlist
 from common import QUALITY_CUTOFF
+from time import timing
 
+_t = timing()
 
 ###########################################################################
 # GENES
 
 def determine_genes_gtf(gene_data: str, chroms: set[str]) -> dict[int, Gene]:
     print "Loading and formatting genes"
-    a = list[str]()
-    with open(gene_data, "r") as f:
-        a = list(f.readlines())
-    i = 0
-    while a[i][0] == "#":
-        i += 1
-    c = a[i:]
-    b = dict[int, list[str]]()
-    for j in range(len(a[i:])):
-        b[j] = c[j][:-2].split("\t")
+    
+    b = [a[:-2].split("\t") for i, a in enumerate(open(gene_data, "r")) if a[0] != '#']
     trans_list = list[int]()
     trans_dict = dict[int, dict[str, list[int]]]()
-    for j in range(len(b)):
-        y = b[j]
+
+    for j, y in enumerate(b):
         if y[2] == "transcript":
             trans_list.append(j)
             trans_dict[j] = {"exon_starts": list[int](), "exon_lengths": list[int]()}
@@ -80,7 +74,6 @@ def determine_genes_gtf(gene_data: str, chroms: set[str]) -> dict[int, Gene]:
                 gene_type
             )
             transcripts[j].index = j
-
     return transcripts
 
 
@@ -204,22 +197,19 @@ def make_RNA_data_from_fragmat(
     error: float,
     isoforms: str
 ) -> RNAData:
-    ##RNA DATA
-    read_list = make_readlist_from_fragmat(fragmats, skip_single=False)
+    read_list = make_readlist_from_fragmat(fragmats, skip_single=False) # 4s
     print f"Loading VCF file {vcf}"
-    S, names, chroms, positions, k = positions_names_states(vcf)
-    chrom_set = set(chroms.values())
-    n = len(S)
+    S, names, chroms, positions, k = positions_names_states(vcf) # 3s
     print "Preparing data for ReadGraph"
-    genes = determine_genes_gtf(gene_data, chrom_set)
-
+    genes = determine_genes_gtf(gene_data, set(chroms.values())) # 42s
+    
     isodict = dict[str, tuple[float, str]]()
     filtered_genes = genes
     if isoforms != "":
         print "Building IsoDict"
         isodict = build_isodict(isoforms)
         filtered_genes = filter_transcripts(genes, isodict)
-
+    
     return RNAData(
         S, genes, filtered_genes, error, read_list, positions, names, chroms, isodict
     )
@@ -231,7 +221,6 @@ def make_data_from_fragmat(
     error: float,
     RNA_readlist: dict[int, Read] = dict[int, Read]()
 ) -> Data:
-    ##regular DNA fragmat
     read_list = make_readlist_from_fragmat(fragmat, skip_single=True)
     if len(RNA_readlist) > 0:
         max_key = max(read_list.keys())

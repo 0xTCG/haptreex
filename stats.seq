@@ -11,14 +11,15 @@ def num_SNP(STU: dict[int, list[int]]) -> int:
 def switches_comp_strand2(
     start: int,
     strand: int,
-    sol: dict[int, dict[int, dict[int, int]]],
+    sol: dict[int, tuple[dict[int, int], dict[int, int]]],
     gold: dict[int, dict[int, int]],
     G: RNAData
 ) -> tuple[int, list[int]]:
     m = 0
     switches = list[int]()
     for i in G.components[start]:
-        if sol[start][strand][i] != gold[0][i] and gold[0][i] != common.DOT:
+        p = [sol[start][0][i], sol[start][1][i]]
+        if p[strand] != gold[0][i] and gold[0][i] != common.DOT:
             switches.append(i)
             m += 1
             strand = 1 - strand
@@ -27,7 +28,7 @@ def switches_comp_strand2(
 
 def switches_in_comp2(
     start: int,
-    sol: dict[int, dict[int, dict[int, int]]],
+    sol: dict[int, tuple[dict[int, int], dict[int, int]]],
     gold: dict[int, dict[int, int]],
     G: RNAData
 ) -> tuple[int, list[int]]:
@@ -40,7 +41,7 @@ def switches_in_comp2(
 
 
 def con_dis_non(
-    X: dict[int, dict[int, dict[int, int]]], V: dict[int, dict[int, int]]
+    X: dict[int, tuple[dict[int, int], dict[int, int]]], V: dict[int, dict[int, int]]
 ) -> tuple[dict[int, dict[str, int]], list[int]]:
     counts = dict[int, dict[str, int]]()  # {x:{} for x in X}
     for x in X:
@@ -78,6 +79,8 @@ def stats(
     ### all of these current_STU* filter the set of SNPs we are going to try to phase
     current_STU0 = RD.snps_to_use
     print f"Original RD SNP dictionary size: {len(current_STU0)} {num_SNP(current_STU0)}"
+    #for s in sorted(current_STU0):
+    #    print f"{s} {max(RD.rates[s].values())} {rate_cutoff}"
     current_STU1 = update_snps_to_use_rate(RD, current_STU0, rate_cutoff)
     print f"STU1(rate_cutoff) RD SNP size: {len(current_STU1)} {num_SNP(current_STU1)}"
     current_STU2 = update_snps_to_use_coverage(RD, current_STU1, coverage_cutoff)

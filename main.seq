@@ -1,4 +1,5 @@
 from common import V, DOT
+from time import timing
 import datagen
 import joint
 import rna
@@ -7,10 +8,11 @@ import alg
 import stats
 import output
 import os
-import time
 import sys
+import random
 
 print 'HapTree-X v1.0 [Seq]'
+random.seed(51)
 
 # parser = argparse.ArgumentParser(description="HapTree-X!")
 # parser.add_argument(
@@ -41,13 +43,11 @@ print 'HapTree-X v1.0 [Seq]'
 # args = parser.parse_args()
 
 vcf = sys.argv[1] #args.vcf
-RNAfragmat = sys.argv[2] # args.RNAfragmat
-gene_data = sys.argv[3] # args.gene_info
-outputname = sys.argv[4] #args.outputfolder
-DNAfragmat = "" #sys.argv[2] # args.DNAfragmat
+DNAfragmat = sys.argv[2] #sys.argv[2] # args.DNAfragmat
+RNAfragmat = "" #sys.argv[2] # args.RNAfragmat
+gene_data = "" #sys.argv[3] # args.gene_info
+outputname = sys.argv[3] #args.outputfolder
 isoforms = "" #sys.argv[6] # args.isoforms
-
-time_start = time.time()
 
 if vcf == "":
    raise ValueError("Error: vcf required")
@@ -87,68 +87,61 @@ def make_golden_from_true2(
             d[0][j] = DOT
             d[1][j] = DOT
     return d, vChroms, vPositions
-print f"Loading VCF file {vcf} for scoring"
-V, vcfChroms, vcfPositions = make_golden_from_true2(vcf)
+vcfChroms, vcfPositions = list[str](), list[str]()
+with timing(f"[0] Loading gold VCF {vcf}"):
+    V, vcfChroms, vcfPositions = make_golden_from_true2(vcf)
 
-if RNAfragmat == "" or gene_data == "":
-    "Missing RNAfragmat, running phasing without DASE"
-    if DNAfragmat == "":  # Only RNA data provided without gene info
-        D = datagen.make_data_from_fragmat(RNAfragmats, vcf, 0.02)
-        G = graph.Graph(D)
-        GX = alg.RNA_phase(
-            0.001, pair_thresh, 0.02, G.read_dict, G.comp_mins, G.components
-        )
-        output.make_solution(
-            GX, G, outputname, "HapTreeX_noDASE_output.txt"
-        )  # Running regular Haptree on 2-reads in the genome
+with timing('Main'):
+    if RNAfragmat == "" or gene_data == "":
+        "Missing RNAfragmat, running phasing without DASE"
+        if DNAfragmat == "":  # Only RNA data provided without gene info
+            D = datagen.make_data_from_fragmat(RNAfragmats, vcf, 0.02)
+            G = graph.Graph(D)
+            GX = alg.RNA_phase(
+                0.001, pair_thresh, 0.02, G.read_dict, G.comp_mins, G.components
+            )
+            output.make_solution(
+                GX, G, outputname, "HapTreeX_noDASE_output.txt"
+            )  # Running regular Haptree on 2-reads in the genome
+        else:
+            D: graph.Data = None
+            with timing('[1] Making fragmat'):
+                if RNAfragmat != "":
+                    DNAfragmats = [DNAfragmat, RNAfragmat]
+                D = datagen.make_data_from_fragmat(DNAfragmats, vcf, 0.02)
+            G: graph.Graph = None
+            with timing('[2] Making graph'):
+                G = graph.Graph(D)
+            with timing('[3] Phasing'):
+                GX = alg.RNA_phase(
+                    0.001, pair_thresh, 0.02, G.read_dict, G.comp_mins, G.components
+                )
+                output.make_solution(
+                    GX, G, outputname, "HapTreeX_noDASE_output.txt"
+                )  # Running regular Haptree on 2-reads in the genome
     else:
-        if RNAfragmat != "":
-            DNAfragmats = [DNAfragmat, RNAfragmat]
-        D = datagen.make_data_from_fragmat(DNAfragmats, vcf, 0.02)
-        time1 = time.time()
-        print f"Pt 1 took {time1 - time_start}"
-        G = graph.Graph(D)
-        time2 = time.time()
-        print f"Pt 2 took {time2 - time1}"
-        GX = alg.RNA_phase(
-            0.001, pair_thresh, 0.02, G.read_dict, G.comp_mins, G.components
-        )
-        time3 = time.time()
-        print f"Pt 3 took {time3 - time2}"
-        output.make_solution(
-            GX, G, outputname, "HapTreeX_noDASE_output.txt"
-        )  # Running regular Haptree on 2-reads in the genome
-        time4 = time.time()
-        print f"Pt 4 took {time4 - time3}"
-        print f"Total took {time4 - time_start}"
-else:
-    RD = datagen.make_RNA_data_from_fragmat(gene_data, RNAfragmats, vcf, 0.02, isoforms)
-    time1 = time.time()
-    print f"Pt 1 took", time1 - time_start
-    stats.stats(RD, 2, 0.2, 0.6, 0, 2, 0.001, 0.2)
-    times = time.time()
-    print f"stats took {times - time1}"
-    D = None
-    if DNAfragmat == "":
-        D = rna.make_data_from_RNA_data(RD)
-    else:
-        D = datagen.make_data_from_fragmat(DNAfragmats, vcf, 0.02, RD.long_read_list)
-    G = graph.Graph(D)
-    jG = joint.JointGraph(RD, G)
-    time2 = time.time()
-    print f"Pt 2 took {time2 - times}"
-    jGX = alg.RNA_phase(
-        0.001, pair_thresh, 0.02, jG.read_dict, jG.comp_mins, jG.components
-    )
-    time3 = time.time()
-    print f"Pt 3 took {time3 - time2}"
-    output.make_solution_simple(
-        jGX,
-        outputname,
-        "HapTreeX_withDASE_output.txt",
-        vcfChroms,
-        vcfPositions
-    )  # Phasing using both 1-reads and 2-reads from DNAfragmat + RNAfragmat
-    time4 = time.time()
-    print f"Pt 4 took {time4 - time3}"
-    print f"Total took {time4 - time_start}"
+        RD: rna.RNAData = None
+        with timing('[1] Making RNA fragmat'):
+            RD = datagen.make_RNA_data_from_fragmat(gene_data, RNAfragmats, vcf, 0.02, isoforms)
+        with timing('[2] Stats'):
+            stats.stats(RD, 2, 0.2, 0.6, 0, 2, 0.001, 0.2)
+        jG: joint.JointGraph = None
+        with timing('[3] Graph'):
+            D = None
+            if DNAfragmat == "":
+                D = rna.make_data_from_RNA_data(RD)
+            else:
+                D = datagen.make_data_from_fragmat(DNAfragmats, vcf, 0.02, RD.long_read_list)
+            G = graph.Graph(D)
+            jG = joint.JointGraph(RD, G)
+        with timing('[4] Phasing'):
+            jGX = alg.RNA_phase(
+                0.001, pair_thresh, 0.02, jG.read_dict, jG.comp_mins, jG.components
+            )
+            output.make_solution_simple(
+                jGX,
+                outputname,
+                "HapTreeX_withDASE_output.txt",
+                vcfChroms,
+                vcfPositions
+            )  # Phasing using both 1-reads and 2-reads from DNAfragmat + RNAfragmat

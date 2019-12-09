@@ -1,86 +1,62 @@
 from math import log
 from read import Read
-from common import CONFIDENCE, Pair
+from common import CONFIDENCE
+import sys
 
 
 def read_val_tail(
-    partial_phase: dict[int, dict[int, int]],
+    partial_phase: tuple[dict[int, int], dict[int, int]],
     p: float,
     error: float,
-    read_dict: dict[int, list[Read]],
+    relevant_reads: list[Read],
     m: int,
     m_prev: int
 ) -> float:
     """
     we extend a phasing and then calculating how likely that extension is
     this looks at the prob of a particular phasing generating the set of reads 
-    which cover "end" and for which "end" is not the smallest SNP in the read. 
+    which cover "end" ( = "m") and for which "end" is not the smallest SNP in the read. 
     (relevant reads for the extension)
     this log prob gets added to the log prob of the non-extended phasing.
     """
 
-    end = m
-    k = 2
     a = (1 - error) / (1 - (2 * error / 3.0))
     b = (error / 3.0) / (1 - (2 * error / 3.0))
-    relevant_reads = read_dict[end]
     val, val2 = 0.0, 0.0 
     for read_obj in relevant_reads:
         probs, probs2 = 0.0, 0.0
-        for strand in range(k):
-            pp = partial_phase[strand]
-            prob = (CONFIDENCE * read_obj.rates[strand]) + (0.5 * (1 - CONFIDENCE))
-            mini_read = read_obj.mini_reads[end]
+        for i, pp in enumerate(partial_phase):
+            prob = (CONFIDENCE * read_obj.rates[i]) + (0.5 * (1 - CONFIDENCE))
+            mini_read = read_obj.mini_reads[m]
             for key in mini_read:
                 prob *= (a if mini_read[key] == pp[key] else b)
-            probs2 += prob / (a if mini_read[end] == pp[end] else b)
+            probs2 += prob / (a if mini_read[m] == pp[m] else b)
             probs += prob
         if probs == 0:
             val = -float("inf")
         else:
             val += log(probs) * read_obj.count
-            if not end == read_obj.special_key:
+            if not m == read_obj.special_key:
                 val2 += log(probs2) * read_obj.count
 
     # p is some measure of likelihood of adjacent mutations occuring together
     # since we've know extended the haplotype we need to update the prior
     if len(partial_phase[0]) > 1:
-        val += log(p if partial_phase[0][end] == partial_phase[0][m_prev] else 1 - p)
+        val += log(p if partial_phase[0][m] == partial_phase[0][m_prev] else 1 - p)
     return val - val2
-
-
-def add_column_dict(
-    m: int, l: dict[int, dict[int, int]], column: Pair[int]
-) -> dict[int, dict[int, int]]:
-    """adds column to solution l"""
-    new = { 0: {key: l[0][key] for key in l[0]},
-            1: {key: l[1][key] for key in l[1]} }
-    for i in range(len(column)):
-        new[i][m] = column[i]
-    return new
-
-
-def temp_add_column_dict(
-    m: int, l: dict[int, dict[int, int]], column: Pair[int]
-) -> dict[int, dict[int, int]]:
-    """adds column to solution l (on exisiting solution)"""
-    new = l
-    for i in range(len(column)):
-        new[i][m] = column[i]
-    return new
 
 
 # def branch(m: int,m_prev: Optional[int],LISTS: Union[list[dict[int, dict[int, int]]], list[dict[int, DUMMY_NAME]]],DICT: dict[int, Union[int, float]],threshold: float,p: float,error: float,read_dict: dict[int, list[Read]]) -> tuple[list[dict[int, dict[int, int]]], dict[int, float]]:
 def branch(
     m: int,
     m_prev: int,
-    lists: list[dict[int, dict[int, int]]],
+    lists: list[tuple[dict[int, int], dict[int, int]]],
     table: dict[int, float],
     threshold: float,
     p: float,
     error: float,
     read_dict: dict[int, list[Read]]
-) -> tuple[list[dict[int, dict[int, int]]], dict[int, float]]:
+):
     """
     k=2 only
     branch all solutions to highly probable solutions on one additional SNP
@@ -88,54 +64,41 @@ def branch(
     dict has list index of solutions and their likelihoods
     """
     
-    columns = [Pair(0, 1), Pair(1, 0)]
-    new_lists = list[dict[int, dict[int, int]]]()
+    threshold = log(threshold / (1 - threshold))
+    new_lists = list[tuple[dict[int, int], dict[int, int]]]()
     new_table = dict[int, float]()
-    count_list_index = 0  # counter for length of new_lists
-    for i in range(len(lists)):
-        partial_phase = lists[i]
+    for i, partial_phase in enumerate(lists):
         # extend solution
-        costs = {c: 0.0 for c in columns}
-        corrections = {c: 0.0 for c in columns}
-
-        for c in columns:
+        costs = dict[tuple[int, int], float]()
+        for c in ((0, 1), (1, 0)):
             # adding possible orderings of alleles for new SNP for diploid
-            extended_partial_phase = temp_add_column_dict(m, partial_phase, c)
-            costs[c] = read_val_tail(partial_phase, p, error, read_dict, m, m_prev)
-
+            partial_phase[0][m], partial_phase[1][m] = c
+            costs[c] = read_val_tail(partial_phase, p, error, read_dict[m], m, m_prev)
         max_cost = max(costs.values())
-        new_costs = {key: costs[key] - max_cost for key in list(costs.keys())}
-        used = False
-        for c in costs.keys():
-            if new_costs[c] >= log(threshold / (1 - threshold)):
+        new_costs = {key: costs[key] - max_cost for key in costs}
+        for c in costs:
+            if new_costs[c] >= threshold:
                 # adds extension with allele ordering c if sufficiently likely
-                likely_extended_partial_phase = dict[int, dict[int, int]]()
-                if used:  # can use the old dict once
-                    likely_extended_partial_phase = add_column_dict(m, partial_phase, c)
-                else:  # need to make a copy of the dict
-                    likely_extended_partial_phase = temp_add_column_dict(
-                        m, partial_phase, c
-                    )
-                    used = True
+                extended_phase = (copy(partial_phase[0]), copy(partial_phase[1])) if c[0] == 1 else partial_phase
+                extended_phase[0][m], extended_phase[1][m] = c
                 # adds new solution to the dict with its new likelihood
                 # all the entries are positive instead of negative
-                new_table[count_list_index] = table[i] - costs[c]
-                count_list_index += 1
-                new_lists.append(likely_extended_partial_phase)
+                new_table[len(new_lists)] = table[i] - costs[c]
+                new_lists.append(extended_phase)
     return new_lists, new_table
 
 
 def prune(
     m: int,
-    lists: list[dict[int, dict[int, int]]],
+    lists: list[tuple[dict[int, int], dict[int, int]]],
     table: dict[int, float],
     components: dict[int, list[int]]
-) -> tuple[list[dict[int, dict[int, int]]], dict[int, float]]:
+):
     # prune solutions based on number of solutions and thresholds
     n = max(components[m])
     L = len(lists)
     count_list_index = 0
-    new_lists = list[dict[int, dict[int, int]]]()
+    new_lists = list[tuple[dict[int, int], dict[int, int]]]()
     new_dict = dict[int, float]()
     go = False
     threshold = 1.0
@@ -174,23 +137,24 @@ def RNA_phase(
     comp_mins: list[int],
     components: dict[int, list[int]]
 ):
-    phases = dict[int, dict[int, dict[int, int]]]()
+    phases = dict[int, tuple[dict[int, int],  dict[int, int]]]()
     for start in comp_mins:
         # find phasing solution for connected component starting at start
-        init = {0: dict[int, int](), 1: dict[int, int]()}
-        lists = [init]
+        lists = [(dict[int, int](), dict[int, int]())]
         table = {0: 0.0}
         skipped = True  # set to True to allow allele permutations
         m_prev = -1 # SEQ/TODO: check! originally  None
         for m in components[start]:
             if skipped:
                 lists, table = branch(m, m_prev, lists, table, threshold, p, error, read_dict)
+                # print(f'!lists: {start} {m} .. {m_prev} -> {lists}')
                 lists, table = prune(m, lists, table, components)
+                # print(f'@lists: {start} {m} .. {m_prev} -> {lists}')
             else:  # specify beginning to remove allele permutations
-                init = {0: {m: 0}, 1: {m: 1}}
-                lists = [init]
+                lists = [(dict[int, int](), dict[int, int]())]
                 table = {0: 0.0}
                 skipped = True
             m_prev = m
+        # print(f'{start} -> {components[start]} {lists[0]}')
         phases[start] = lists[0]
     return phases

@@ -42,17 +42,16 @@ def forward(
     e = 0.0001
     p = p * (1 - e) + (1 - p) * (e)
     q = 1 - p
+    Y = [float(y) for y in vec[i]]
     if i == 0:
-        Y = vec[i]
         if X == 1:
             FD[1, 0] = 0.0
             return 0.0
         else:
-            val = binom(Y[0] + Y[1], Y[0]) * (p ** Y[0]) * (q ** Y[1])
-            FD[0, 0] = pow(10.0, 10.0) * val
-            return pow(10.0, 10.0) * val
+            val = binom(Y[0] + Y[1], Y[0]) * pow(p, Y[0]) * pow(q, Y[1]) * pow(10.0, 10.0) 
+            FD[0, 0] = val
+            return val
     else:
-        Y = vec[i]
         f0 = forward(FD, 0, vec, i - 1, rate, p)
         f1 = forward(FD, 1, vec, i - 1, rate, p)
         if (0, i - 1) not in FD:
@@ -62,12 +61,11 @@ def forward(
 
         SUM_log = log(trans(0, X, rate) * f0 + trans(1, X, rate) * f1)
         sample_prob_log = (Y[X] * log(p)) + (Y[1 - X] * log(q))
-        binom_log = log(float(binom(sum(Y), Y[0])))
-        f_val = exp(SUM_log + sample_prob_log + binom_log)
-
+        binom_log = log(binom(sum(Y), Y[0]))
+        val = pow(10.0, 10.0) * exp(SUM_log + sample_prob_log + binom_log)
         if (X, i) not in FD:
-            FD[X, i] = pow(10.0, 10.0) * f_val
-        return pow(10.0, 10.0) * f_val
+            FD[X, i] = val
+        return val
 
 
 def NW(vec: dict[int, list[int]], rate: float) -> float:
@@ -114,10 +112,10 @@ def find_rates(snps: list[int], reads: list[Read], rate: float) -> dict[int, flo
     counts = get_counts(snps, reads)
     m = max(max(s) for s in counts.values())
 
-    r = 0.0
     if m == 0:
-        raise ValueError(f"should not happen {snps} {reads}")
-    elif m > lb_for_approx:
+        raise ValueError(f"[find_rates] m cannot be zero ({snps}; {reads})")
+    r = 0.0
+    if m > lb_for_approx:
         r = approx_rate(list(counts.values()))
     else:
         r = NW(counts, rate)

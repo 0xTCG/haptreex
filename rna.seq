@@ -252,15 +252,12 @@ class RNAData:
     def assign_rates2(
         self: RNAData, snps_to_use: dict[int, list[int]]
     ) -> dict[int, dict[int, float]]:
-        #times = {}
         rates = dict[int, dict[int, float]]()
         for start in snps_to_use:
             snps = sorted(snps_to_use[start])
             reads = [r for s in snps for r in self.read_dict[s]]
-            # t = time.time()
             r = find_rates(snps, reads, 0.6)  ##Choose adjacent snp rate
-            # t = t - time.time()
-            # times[t] = snps
+            # print f'{start} {snps} {reads} {r}'
             for s in snps:
                 rates[s] = r
             for read in reads:

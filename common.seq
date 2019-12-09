@@ -10,52 +10,20 @@ DOT = -10 # "."
 V = dict[int, dict[int, int]]()
 
 
-class Pair[T]:
-    x: T
-    y: T
-    def __getitem__(self: Pair[T], i: int):
-        return self.x if i == 0 else self.y
-    def __hash__(self: Pair[T]):
-        return (self.x, self.y).__hash__()
-    def __eq__(self: Pair[T], other: Pair[T]):
-        return (self.x, self.y) == (other.x, other.y)
-    def __ne__(self: Pair[T], other: Pair[T]):
-        return (self.x, self.y) == (other.x, other.y)
-    def __len__(self: Pair[T]):
-        return 2
-    def __str__(self: Pair[T]):
-        return (self.x, self.y).__str__()
-    #def __getitem__(self: Pair[T], i: int):
-    #    return self.x if i == 0 else self.y
-
-def cdf(n: int, k: int, var: int) -> float:
+def cdf(n: float, k: int, var: int) -> float:
     p = 0.5
     mu = n * p if var == 0 else n * (1 - p)
     return 0.5 * (1 + erf((k + 0.5 - mu) / sqrt(2 * n * p * (1 - p))))
 
 
-# def binom(n: int, k: int) -> int:
-#     # n CHOOSE k
-#     j = min(k, n - k)
-#     numerator = 1
-#     for i in range(j):
-#         numerator = numerator * (n - i)
-#     return numerator // factorial(j)
-def binom(N: int, k: int) -> int:
-    """https://github.com/scipy/scipy/blob/v1.3.3/scipy/special/_comb.pyx"""
-    # Fast path with machine integers
-    INT_MAX = int((u64(1) << u64(63)) - u64(1))
-    if k > N or N == INT_MAX:
-        return 0
-    M = N + 1
-    nterms = min(k, N - k)
-    val = 1
-    for j in range(1, nterms + 1):
-        if val > INT_MAX // (M - j):
-            return 0
-        val *= M - j
-        val //= j
-    return int(val)
+def binom(n: float, k: float) -> float:
+    if k > n:
+        raise ValueError('binom k > n')
+    if k == 0:
+        return 1.0
+    if k > n / 2:
+        return binom(n, n - k)
+    return n * binom(n - 1, k - 1) / k
 
 
 def score(pair: list[int]) -> float:
@@ -67,14 +35,14 @@ def score(pair: list[int]) -> float:
     k = min(pair)
     var = 0 if pair[0] == k else 1
     p = 0.5
-    n = sum(pair)
+    n = float(sum(pair))
     if n > 50:
         return cdf(n, k, var)
     else:
         prob = 0.0
         for i in range(k + 1):
             if var == 0:
-                prob += (p ** i) * ((1 - p) ** (n - i)) * binom(n, i)
+                prob += (p ** i) * ((1 - p) ** (n - i)) * binom(n, float(i))
             else:
-                prob += ((1 - p) ** i) * (p ** (n - i)) * binom(n, i)
+                prob += ((1 - p) ** i) * (p ** (n - i)) * binom(n, float(i))
         return prob
