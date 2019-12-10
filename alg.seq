@@ -60,7 +60,7 @@ def branch(
     m: int,
     m_prev: int,
     lists: list[tuple[dict[int, int], dict[int, int]]],
-    table: dict[int, float],
+    table: list[float],
     threshold: float,
     p: float,
     error: float,
@@ -74,29 +74,35 @@ def branch(
     """
     
     _t = _C.seq_time()
+    global TP
 
-    threshold = log(threshold / (1 - threshold))
+    # partial_phase[_][m] | partial_phase[_][k for R.mini_reads[m] for R in relevant_reads]
+    # relevante updates: 
+
     new_lists = list[tuple[dict[int, int], dict[int, int]]]()
-    new_table = dict[int, float]()
+    new_table = list[float]()
     configs = [(0, 1), (1, 0)]
     costs = [0.0, 0.0]
-    for i, partial_phase in enumerate(lists):
+    threshold = log(threshold / (1 - threshold))
+    for pi, partial in enumerate(lists):
         # extend solution
         for i in range(2):
             # adding possible orderings of alleles for new SNP for diploid
-            partial_phase[0][m], partial_phase[1][m] = configs[i]
-            costs[i] = read_val_tail(partial_phase, p, error, reads, m, m_prev)
+            partial[0][m], partial[1][m] = configs[i]
+            costs[i] = read_val_tail(partial, p, error, reads, m, m_prev)
         max_cost = max(costs[0], costs[1])
         # new_costs = {key: costs[key] - max_cost for key in costs}
+        used = False
         for i in range(2):
             if costs[i] - max_cost >= threshold:
                 # adds extension with allele ordering c if sufficiently likely
-                extended_phase = (
-                    (copy(partial_phase[0]), copy(partial_phase[1])) if c[0] == 1 
-                    else partial_phase
-                )
+                extended_phase = partial
+                if used:
+                    extended_phase = (copy(partial[0]), copy(partial[1]))
+                else:
+                    used = True
                 extended_phase[0][m], extended_phase[1][m] = configs[i]
-                new_table[len(new_lists)] = table[i] - costs[i]
+                new_table.append(table[pi] - costs[i])
                 new_lists.append(extended_phase)
     global TB
     TB += _C.seq_time() - _t
@@ -107,16 +113,13 @@ def branch(
 def prune(
     m: int,
     lists: list[tuple[dict[int, int], dict[int, int]]],
-    table: dict[int, float],
+    table: list[float],
     n: int
 ):
-    _t = _C.seq_time()
-
     # prune solutions based on number of solutions and thresholds
     L = len(lists)
-    count_list_index = 0
     new_lists = list[tuple[dict[int, int], dict[int, int]]]()
-    new_dict = dict[int, float]()
+    new_dict = list[float]()
     go = False
     threshold = 1.0
     if m == n:
@@ -132,20 +135,16 @@ def prune(
         threshold = 0.001
 
     threshold = abs(log(threshold))
-    min_val = min(table.values())
-    for i in range(len(lists)):
-        l = lists[i]
+    min_val = min(table)
+    for i, l in enumerate(lists):
         if abs(table[i] - min_val) < threshold + 0.0001:
             new_lists.append(l)
-            new_dict[count_list_index] = table[i]
-            count_list_index += 1
+            new_dict.append(table[i])
     if go:
         new_index = 0  # random.randint(0, len(new_lists)-1)
         new_lists = [new_lists[new_index]]
-        new_dict = {0: new_dict[new_index]}
+        new_dict = [new_dict[new_index]]
     
-    global TP
-    TP += _C.seq_time() - _t
     return new_lists, new_dict    
 
 
@@ -158,19 +157,15 @@ def parallel(
     components: dict[int, list[int]],
     output: list[tuple[int, tuple[dict[int, int], dict[int, int]]]]
 ):
-    lists = [(dict[int, int](), dict[int, int]())]
-    table = {0: 0.0}
+    lists, table = [(dict[int, int](), dict[int, int]())], [0.0]
     skipped = True  # set to True to allow allele permutations
-    m_prev = -1 # SEQ/TODO: check! originally  None
+    m_prev = -1 # SEQ/TODO: check! originally None
     for m in components[start[1]]:
         if skipped:
             lists, table = branch(m, m_prev, lists, table, threshold, p, error, read_dict[m])
-            # print(f'!lists: {start} {m} .. {m_prev} -> {lists}')
             lists, table = prune(m, lists, table, max(components[m]))
-            # print(f'@lists: {start} {m} .. {m_prev} -> {lists}')
         else:  # specify beginning to remove allele permutations
-            lists = [(dict[int, int](), dict[int, int]())]
-            table = {0: 0.0}
+            lists, table = [(dict[int, int](), dict[int, int]())], [0.0]
             skipped = True
         m_prev = m
     output[start[0]] = (start[1], lists[0])
@@ -185,7 +180,7 @@ def RNA_phase(
 ):
     output = [(0, (dict[int, int](), dict[int, int]())) for _ in comp_mins]
     print f'using {len(comp_mins)} workers...'
-    enumerate(comp_mins) |> parallel(threshold, p, error, read_dict, components, output)
+    enumerate(comp_mins) ||> parallel(threshold, p, error, read_dict, components, output)
 
-    print f'timings: {TB/1e9} {TP/1e9} {RT/1e9}'
+    print f'timings: {TB/1e9} {TP/1e9} {TR/1e9}'
     return dict(output)
