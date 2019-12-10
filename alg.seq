@@ -78,23 +78,25 @@ def branch(
     threshold = log(threshold / (1 - threshold))
     new_lists = list[tuple[dict[int, int], dict[int, int]]]()
     new_table = dict[int, float]()
+    configs = [(0, 1), (1, 0)]
+    costs = [0.0, 0.0]
     for i, partial_phase in enumerate(lists):
         # extend solution
-        costs = dict[tuple[int, int], float]()
-        for c in ((0, 1), (1, 0)):
+        for i in range(2):
             # adding possible orderings of alleles for new SNP for diploid
-            partial_phase[0][m], partial_phase[1][m] = c
-            costs[c] = read_val_tail(partial_phase, p, error, reads, m, m_prev)
-        max_cost = max(costs.values())
-        new_costs = {key: costs[key] - max_cost for key in costs}
-        for c in costs:
-            if new_costs[c] >= threshold:
+            partial_phase[0][m], partial_phase[1][m] = configs[i]
+            costs[i] = read_val_tail(partial_phase, p, error, reads, m, m_prev)
+        max_cost = max(costs[0], costs[1])
+        # new_costs = {key: costs[key] - max_cost for key in costs}
+        for i in range(2):
+            if costs[i] - max_cost >= threshold:
                 # adds extension with allele ordering c if sufficiently likely
-                extended_phase = (copy(partial_phase[0]), copy(partial_phase[1])) if c[0] == 1 else partial_phase
-                extended_phase[0][m], extended_phase[1][m] = c
-                # adds new solution to the dict with its new likelihood
-                # all the entries are positive instead of negative
-                new_table[len(new_lists)] = table[i] - costs[c]
+                extended_phase = (
+                    (copy(partial_phase[0]), copy(partial_phase[1])) if c[0] == 1 
+                    else partial_phase
+                )
+                extended_phase[0][m], extended_phase[1][m] = configs[i]
+                new_table[len(new_lists)] = table[i] - costs[i]
                 new_lists.append(extended_phase)
     global TB
     TB += _C.seq_time() - _t
