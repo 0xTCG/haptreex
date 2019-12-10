@@ -10,61 +10,77 @@ import output
 import os
 import sys
 import random
+from getopt import getopt, GetoptError
+# import chair
 
 print 'HapTree-X v1.0 [Seq]'
 random.seed(51)
 
-# parser = argparse.ArgumentParser(description="HapTree-X!")
-# parser.add_argument(
-#     "--RNAfragmat", metavar="filename", type=str, help="RNAfragmat", default=None
-# )
-# parser.add_argument(
-#     "--DNAfragmat", metavar="filename", type=str, help="DNAfragmat", default=None
-# )
-# parser.add_argument(
-#     "--isoforms", metavar="filename", type=str, help="Isoform file", default=None
-# )
-# parser.add_argument("--vcf", metavar="filename", type=str, help="VCF file")
-# parser.add_argument(
-#     "--outputfolder",
-#     metavar="foldername",
-#     type=str,
-#     help="Output folder name",
-#     default="HapTreeXResults",
-# )
-# parser.add_argument(
-#     "--gene_info",
-#     metavar="filename",
-#     type=str,
-#     help="Gene model file with GTF format",
-#     default=None,
-# )
+def parse_args() -> tuple[str, str, str, str, str, str]:
+    try:
+        match sys.argv.arr: # cannot match array pattern with non-array value
+            case [_, "chair", ...]:
+                opts, args = getopt(sys.argv[2:], "hv:s:t:TPC", 
+                    ["help", "vcf=", "sam=", "threshold=", "TRANS=", "PCR=", "CONFLICT="]
+                )
+                vcf, sam, threshold = "", "", 1
+                trans, pcr, conflict = True, False, False
+                for o, a in opts:
+                    if o in ("-h", "--help"):
+                        sys.exit(0)
+                    match o:
+                        case '-v' or '--vcf': vcf = a
+                        case '-s' or '--sam': sam = a
+                        case '-t' or '--threshold': threshold = int(a)
+                        case '-T' or '--TRANS': trans = False
+                        case '-P' or '--PCR': pcr = True
+                        case '-C' or '--CONFLICT': conflict = True
+                        case _: assert False, f"unhandled option {o}"
+                if len(args) != 1:
+                    raise ValueError('Output argument missing')
+                outputname = args[0]
+                # with timing('Chair'):
+                    # chair.chair(vcf, sam, threshold, trans, pcr, conflict)
+                sys.exit(0)
+            case [_, "phase", ...]:
+                opts, args = getopt(sys.argv[2:], "hv:d:r:g:i:", 
+                    ["help", "vcf=", "dna=", "rna=", "gene=", "isoform="]
+                )
+                vcf, DNAfragmat, RNAfragmat, gene_data, isoforms = "", "", "", "", ""
+                for o, a in opts:
+                    if o in ("-h", "--help"):
+                        sys.exit(0)
+                    match o:
+                        case '-v' or '--vcf': vcf = a
+                        case '-d' or '--dna': DNAfragmat = a
+                        case '-r' or '--rna': RNAfragmat = a
+                        case '-g' or '--gene': gene_data = a
+                        case '-i' or '--isoform': isoforms = a
+                        case _: assert False, f"unhandled option {o}"
+                if len(args) != 1:
+                    raise ValueError('Output argument missing')
+                outputname = args[0]
+                os.system(f"mkdir -p {outputname}")
+                if vcf == "":
+                    raise ValueError("Error: vcf required")
+                if RNAfragmat == "" and DNAfragmat == "":
+                    raise ValueError(
+                        "Error: at least one of RNAfragmat or DNAfragmat should be given. "
+                        + "You can use Chair tool to generate them from SAM files."
+                    )
+                return vcf, DNAfragmat, RNAfragmat, gene_data, outputname, isoforms
+            case _: 
+                raise ValueError(f'Mode not supported')
+    except ValueError as err:
+        print f'{err.message}'
+        sys.exit(2)
+    except GetoptError as err:
+        print f'{err.message}'
+        sys.exit(2)
 
-# args = parser.parse_args()
 
-vcf = sys.argv[1] #args.vcf
-DNAfragmat = sys.argv[2] #sys.argv[2] # args.DNAfragmat
-RNAfragmat = "" #sys.argv[2] # args.RNAfragmat
-gene_data = "" #sys.argv[3] # args.gene_info
-outputname = sys.argv[3] #args.outputfolder
-isoforms = "" #sys.argv[6] # args.isoforms
-
-if vcf == "":
-   raise ValueError("Error: vcf required")
-
-if RNAfragmat == "" and DNAfragmat == "":
-    raise ValueError(
-        "Error: at least one of RNAfragmat or DNAfragmat should be given. "
-        + "You can use Chair tool to generate them from SAM files."
-    )
-
-RNAfragmats = [RNAfragmat]
-DNAfragmats = [DNAfragmat]
-
-# if not os.path.exists(outputname):
-os.system(f"mkdir -p {outputname}")
+vcf, DNAfragmat, RNAfragmat, gene_data, outputname, isoforms = parse_args()
 pair_thresh = 0.7
-
 
 def make_golden_from_true2(
     filename: str
@@ -95,7 +111,7 @@ with timing('Main'):
     if RNAfragmat == "" or gene_data == "":
         "Missing RNAfragmat, running phasing without DASE"
         if DNAfragmat == "":  # Only RNA data provided without gene info
-            D = datagen.make_data_from_fragmat(RNAfragmats, vcf, 0.02)
+            D = datagen.make_data_from_fragmat([RNAfragmat], vcf, 0.02)
             G = graph.Graph(D)
             GX = alg.RNA_phase(
                 0.001, pair_thresh, 0.02, G.read_dict, G.comp_mins, G.components
@@ -106,8 +122,7 @@ with timing('Main'):
         else:
             D: graph.Data = None
             with timing('[1] Making fragmat'):
-                if RNAfragmat != "":
-                    DNAfragmats = [DNAfragmat, RNAfragmat]
+                DNAfragmats = [DNAfragmat, RNAfragmat] if RNAfragmat != "" else [DNAfragmat]
                 D = datagen.make_data_from_fragmat(DNAfragmats, vcf, 0.02)
             G: graph.Graph = None
             with timing('[2] Making graph'):
@@ -122,7 +137,7 @@ with timing('Main'):
     else:
         RD: rna.RNAData = None
         with timing('[1] Making RNA fragmat'):
-            RD = datagen.make_RNA_data_from_fragmat(gene_data, RNAfragmats, vcf, 0.02, isoforms)
+            RD = datagen.make_RNA_data_from_fragmat(gene_data, [RNAfragmat], vcf, 0.02, isoforms)
         with timing('[2] Stats'):
             stats.stats(RD, 2, 0.2, 0.6, 0, 2, 0.001, 0.2)
         jG: joint.JointGraph = None
@@ -131,7 +146,7 @@ with timing('Main'):
             if DNAfragmat == "":
                 D = rna.make_data_from_RNA_data(RD)
             else:
-                D = datagen.make_data_from_fragmat(DNAfragmats, vcf, 0.02, RD.long_read_list)
+                D = datagen.make_data_from_fragmat([DNAfragmat], vcf, 0.02, RD.long_read_list)
             G = graph.Graph(D)
             jG = joint.JointGraph(RD, G)
         with timing('[4] Phasing'):

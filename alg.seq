@@ -1,8 +1,12 @@
 from math import log
 from read import Read
 from common import CONFIDENCE
+from time import timing
 import sys
 
+TB = 0
+TP = 0 
+TR = 0
 
 def read_val_tail(
     partial_phase: tuple[dict[int, int], dict[int, int]],
@@ -20,14 +24,16 @@ def read_val_tail(
     this log prob gets added to the log prob of the non-extended phasing.
     """
 
+    _t = _C.seq_time()
+
     a = (1 - error) / (1 - (2 * error / 3.0))
     b = (error / 3.0) / (1 - (2 * error / 3.0))
     val, val2 = 0.0, 0.0 
     for read_obj in relevant_reads:
+        mini_read = read_obj.mini_reads[m]
         probs, probs2 = 0.0, 0.0
         for i, pp in enumerate(partial_phase):
             prob = (CONFIDENCE * read_obj.rates[i]) + (0.5 * (1 - CONFIDENCE))
-            mini_read = read_obj.mini_reads[m]
             for key in mini_read:
                 prob *= (a if mini_read[key] == pp[key] else b)
             probs2 += prob / (a if mini_read[m] == pp[m] else b)
@@ -43,6 +49,9 @@ def read_val_tail(
     # since we've know extended the haplotype we need to update the prior
     if len(partial_phase[0]) > 1:
         val += log(p if partial_phase[0][m] == partial_phase[0][m_prev] else 1 - p)
+    
+    global TR
+    TR += _C.seq_time() - _t
     return val - val2
 
 
@@ -55,7 +64,7 @@ def branch(
     threshold: float,
     p: float,
     error: float,
-    read_dict: dict[int, list[Read]]
+    reads: list[Read]
 ):
     """
     k=2 only
@@ -64,6 +73,8 @@ def branch(
     dict has list index of solutions and their likelihoods
     """
     
+    _t = _C.seq_time()
+
     threshold = log(threshold / (1 - threshold))
     new_lists = list[tuple[dict[int, int], dict[int, int]]]()
     new_table = dict[int, float]()
@@ -73,7 +84,7 @@ def branch(
         for c in ((0, 1), (1, 0)):
             # adding possible orderings of alleles for new SNP for diploid
             partial_phase[0][m], partial_phase[1][m] = c
-            costs[c] = read_val_tail(partial_phase, p, error, read_dict[m], m, m_prev)
+            costs[c] = read_val_tail(partial_phase, p, error, reads, m, m_prev)
         max_cost = max(costs.values())
         new_costs = {key: costs[key] - max_cost for key in costs}
         for c in costs:
@@ -85,17 +96,21 @@ def branch(
                 # all the entries are positive instead of negative
                 new_table[len(new_lists)] = table[i] - costs[c]
                 new_lists.append(extended_phase)
+    global TB
+    TB += _C.seq_time() - _t
     return new_lists, new_table
+
 
 
 def prune(
     m: int,
     lists: list[tuple[dict[int, int], dict[int, int]]],
     table: dict[int, float],
-    components: dict[int, list[int]]
+    n: int
 ):
+    _t = _C.seq_time()
+
     # prune solutions based on number of solutions and thresholds
-    n = max(components[m])
     L = len(lists)
     count_list_index = 0
     new_lists = list[tuple[dict[int, int], dict[int, int]]]()
@@ -126,9 +141,38 @@ def prune(
         new_index = 0  # random.randint(0, len(new_lists)-1)
         new_lists = [new_lists[new_index]]
         new_dict = {0: new_dict[new_index]}
+    
+    global TP
+    TP += _C.seq_time() - _t
     return new_lists, new_dict    
 
 
+def parallel(
+    start: tuple[int, int],
+    threshold: float,
+    p: float,
+    error: float,
+    read_dict: dict[int, list[Read]],
+    components: dict[int, list[int]],
+    output: list[tuple[int, tuple[dict[int, int], dict[int, int]]]]
+):
+    lists = [(dict[int, int](), dict[int, int]())]
+    table = {0: 0.0}
+    skipped = True  # set to True to allow allele permutations
+    m_prev = -1 # SEQ/TODO: check! originally  None
+    for m in components[start[1]]:
+        if skipped:
+            lists, table = branch(m, m_prev, lists, table, threshold, p, error, read_dict[m])
+            # print(f'!lists: {start} {m} .. {m_prev} -> {lists}')
+            lists, table = prune(m, lists, table, max(components[m]))
+            # print(f'@lists: {start} {m} .. {m_prev} -> {lists}')
+        else:  # specify beginning to remove allele permutations
+            lists = [(dict[int, int](), dict[int, int]())]
+            table = {0: 0.0}
+            skipped = True
+        m_prev = m
+    output[start[0]] = (start[1], lists[0])
+    
 def RNA_phase(
     threshold: float,
     p: float,
@@ -137,24 +181,9 @@ def RNA_phase(
     comp_mins: list[int],
     components: dict[int, list[int]]
 ):
-    phases = dict[int, tuple[dict[int, int],  dict[int, int]]]()
-    for start in comp_mins:
-        # find phasing solution for connected component starting at start
-        lists = [(dict[int, int](), dict[int, int]())]
-        table = {0: 0.0}
-        skipped = True  # set to True to allow allele permutations
-        m_prev = -1 # SEQ/TODO: check! originally  None
-        for m in components[start]:
-            if skipped:
-                lists, table = branch(m, m_prev, lists, table, threshold, p, error, read_dict)
-                # print(f'!lists: {start} {m} .. {m_prev} -> {lists}')
-                lists, table = prune(m, lists, table, components)
-                # print(f'@lists: {start} {m} .. {m_prev} -> {lists}')
-            else:  # specify beginning to remove allele permutations
-                lists = [(dict[int, int](), dict[int, int]())]
-                table = {0: 0.0}
-                skipped = True
-            m_prev = m
-        # print(f'{start} -> {components[start]} {lists[0]}')
-        phases[start] = lists[0]
-    return phases
+    output = [(0, (dict[int, int](), dict[int, int]())) for _ in comp_mins]
+    print f'using {len(comp_mins)} workers...'
+    enumerate(comp_mins) |> parallel(threshold, p, error, read_dict, components, output)
+
+    print f'timings: {TB/1e9} {TP/1e9} {RT/1e9}'
+    return dict(output)
