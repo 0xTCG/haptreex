@@ -63,11 +63,6 @@ def parse_args() -> tuple[str, str, str, str, str, str]:
                 os.system(f"mkdir -p {outputname}")
                 if vcf == "":
                     raise ValueError("Error: vcf required")
-                if RNAfragmat == "" and DNAfragmat == "":
-                    raise ValueError(
-                        "Error: at least one of RNAfragmat or DNAfragmat should be given. "
-                        + "You can use Chair tool to generate them from SAM files."
-                    )
                 return vcf, DNAfragmat, RNAfragmat, gene_data, outputname, isoforms
             case _: 
                 raise ValueError(f'Mode not supported')
@@ -108,33 +103,27 @@ with timing(f"[0] Loading gold VCF {vcf}"):
     V, vcfChroms, vcfPositions = make_golden_from_true2(vcf)
 
 with timing('Main'):
-    if RNAfragmat == "" or gene_data == "":
-        "Missing RNAfragmat, running phasing without DASE"
-        if DNAfragmat == "":  # Only RNA data provided without gene info
-            D = datagen.make_data_from_fragmat([RNAfragmat], vcf, 0.02)
+    if DNAfragmat == "" and RNAfragmat == "": # 1, 2
+        print "Need either RNA or DNA data to phase"
+    elif DNAfragmat == "" and gene_data == "": # 3
+        print "Running RNA phasing without DASE (no gene data provided)"
+        D = datagen.make_data_from_fragmat([RNAfragmat], vcf, 0.02)
+        G = graph.Graph(D)
+        GX = alg.RNA_phase(0.001, pair_thresh, 0.02, G.read_dict, G.comp_mins, G.components)
+        output.make_solution(GX, G, outputname, "HapTreeX_noDASE_output.txt")
+    elif DNAfragmat != "" and (RNAfragmat == "" or gene_data == ""): # 5, 6, 7
+        print "Running DNA phasing without DASE (either no RNA or no gene data provided)"
+        D: graph.Data = None
+        with timing('[1] Making fragmat'):
+            DNAfragmats = [DNAfragmat, RNAfragmat] if RNAfragmat != "" else [DNAfragmat]
+            D = datagen.make_data_from_fragmat(DNAfragmats, vcf, 0.02)
+        G: graph.Graph = None
+        with timing('[2] Making graph'):
             G = graph.Graph(D)
-            GX = alg.RNA_phase(
-                0.001, pair_thresh, 0.02, G.read_dict, G.comp_mins, G.components
-            )
-            output.make_solution(
-                GX, G, outputname, "HapTreeX_noDASE_output.txt"
-            )  # Running regular Haptree on 2-reads in the genome
-        else:
-            D: graph.Data = None
-            with timing('[1] Making fragmat'):
-                DNAfragmats = [DNAfragmat, RNAfragmat] if RNAfragmat != "" else [DNAfragmat]
-                D = datagen.make_data_from_fragmat(DNAfragmats, vcf, 0.02)
-            G: graph.Graph = None
-            with timing('[2] Making graph'):
-                G = graph.Graph(D)
-            with timing('[3] Phasing'):
-                GX = alg.RNA_phase(
-                    0.001, pair_thresh, 0.02, G.read_dict, G.comp_mins, G.components
-                )
-                output.make_solution(
-                    GX, G, outputname, "HapTreeX_noDASE_output.txt"
-                )  # Running regular Haptree on 2-reads in the genome
-    else:
+        with timing('[3] Phasing'):
+            GX = alg.RNA_phase(0.001, pair_thresh, 0.02, G.read_dict, G.comp_mins, G.components)
+            output.make_solution(GX, G, outputname, "HapTreeX_noDASE_output.txt")
+    else: # 4, 8
         RD: rna.RNAData = None
         with timing('[1] Making RNA fragmat'):
             RD = datagen.make_RNA_data_from_fragmat(gene_data, [RNAfragmat], vcf, 0.02, isoforms)

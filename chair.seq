@@ -41,7 +41,7 @@ class SNP:
     # These flags specify whether the alleles above are valid 
     # (1 if valid, if invalid, in the VCF but not in the genotype field) 
     valid: list[bool]
-    isHet: bool
+    het: bool
 
 
 class Chr:
@@ -58,13 +58,24 @@ type SNPcov(snp_id: int, allele_id: int, qual: str):
         return self.snp_id < o.snp_id
 
 
+class Record:
+    size: int
+    read: str
+    alleles: list[tuple[int, str]]
+    qual: str
+
+
 def find_interval(snps: list[SNP], c: Chr, pos: int, sz: int):
     beg, end = c.start, c.end
     while beg <= end:
         mid = (beg + end) // 2
         assert 0 <= mid < len(snps)
         if snps[mid].pos >= pos and snps[mid].pos < pos + sz:
-            while mid > 0 and snps[mid - 1].pos >= pos and snps[mid - 1].pos < pos + sz:
+            while (
+                mid > 0 
+                and snps[mid - 1].pos >= pos 
+                and snps[mid - 1].pos < pos + sz
+            ):
                 mid -= 1
             return mid
         elif snps[mid].pos < pos: beg = mid + 1
@@ -77,9 +88,9 @@ def process_sam(
     sam: SAMRecord, 
     snps: list[SNP], 
     chrs: dict[int, Chr], 
-    SNPcovList: list[SNPcov]
+    snpcovs: list[SNPcov]
 ):
-    """Process the SAM line and add covered SNPs to the SNPcovList"""
+    """Process the SAM line and add covered SNPs to the snpcovs"""
 
     if sam.unmapped or not len(sam.cigar):
         return -1
@@ -93,8 +104,12 @@ def process_sam(
                 # interval endpoints for the binary search
                 if sam.tid not in chrs: continue
                 x = find_interval(snps, chrs[sam.tid], sam.pos + ref, sz)
-                while x != -1 and snps[x].pos >= sam.pos + ref and snps[x].pos < sam.pos + ref + sz:
-                    if not snps[x].isHet: 
+                while (
+                    x != -1 
+                    and snps[x].pos >= sam.pos + ref 
+                    and snps[x].pos < sam.pos + ref + sz
+                ):
+                    if not snps[x].het: 
                         x += 1
                         continue
                     # if it's heterozygous, is no reason to add self to the list    
@@ -105,7 +120,7 @@ def process_sam(
                     ]
                     if len(allele):
                         qual = '.' if sam.qual == "*" else sam.qual[t]
-                        SNPcovList.append(SNPcov(snps[x].id, allele[0], qual))
+                        snpcovs.append(SNPcov(snps[x].id, allele[0], qual))
                     x += 1
                 read += sz
                 ref += sz
@@ -115,6 +130,7 @@ def process_sam(
     return sam.tid
 
 
+S,P,Q=0,0,0
 def parse_pair(
     lines: list[SAMRecord], 
     chrs: dict[int, Chr], 
@@ -123,79 +139,76 @@ def parse_pair(
     trans_report: bool, 
     pcr_dup: bool,
     conflict_mate: bool
-) -> generator[tuple[int, str, list[int, str], str]]:
-    SNPcovList = list[SNPcov]()
+) -> Record:
+    global S,P,Q
+    snpcovs = list[SNPcov]()
     readName = lines[0].name
     if len(lines) > 1:
         if pcr_dup:
             if lines[0].duplicate and lines[1].duplicate:
-                return
+                return None
             elif lines[0].duplicate:
                 print f"Warning: Only one pair of {readName} is marked as PCR duplicate"
-        chr1 = process_sam(lines[0], snps, chrs, SNPcovList)
-        len1 = len(SNPcovList)
+        chr1 = process_sam(lines[0], snps, chrs, snpcovs)
+        len1 = len(snpcovs)
 
-        chr2 = process_sam(lines[1], snps, chrs, SNPcovList)
-        len2 = len(SNPcovList) - len1
+        chr2 = process_sam(lines[1], snps, chrs, snpcovs)
+        len2 = len(snpcovs) - len1
         if chr1 != chr2 and not trans_report:
-            return
+            return None
         # Adding an MP suffix like extractHairs to specify that matepairs are merged
         if len1 and len2:
             readName += "_MP"
+        P+=1
     else:
         if pcr_dup and lines[0].duplicate:
-            return
-        process_sam(lines[0], snps, chrs, SNPcovList)
+            return None
+        process_sam(lines[0], snps, chrs, snpcovs)
+        S+=1
         
     # Output printing is done in the same way for single and paired-end reads       
     # Count valid SNPs here and eliminate if needed
-    used = [False] * len(SNPcovList)
-    for i in range(1, len(SNPcovList)):
-        if SNPcovList[i].snp_id != SNPcovList[i - 1].snp_id:
+    snpcovs.sort()
+    used = [False] * len(snpcovs)
+    for i in range(1, len(snpcovs)):
+        if snpcovs[i].snp_id != snpcovs[i - 1].snp_id:
             continue
-        if conflict_mate and SNPcovList[i].allele_id != SNPcovList[i - 1].allele_id:
+        if conflict_mate and snpcovs[i].allele_id != snpcovs[i - 1].allele_id:
             used[i - 1] = used[i] = True
         else:
             # Keep the one that has higher quality. 
             # Works for both inconsistent and consistent alleles
-            used[i - 1 if SNPcovList[i].qual > SNPcovList[i - 1].qual else i] = True
-    SNPcovList = [s for u, s in zip(used, SNPcovList) if not u]
+            used[i - 1 if snpcovs[i].qual > snpcovs[i - 1].qual else i] = True
+    snpcovs = [s for u, s in zip(used, snpcovs) if not u]
     # Single reads are not printed -- it might change for RNA-seq
-    if len(SNPcovList) < het_snp_threshold:
-        return
+    if len(snpcovs) < het_snp_threshold:
+        return None
+
+    Q+=1
     # Output function here
     # o1 = the number of extractHairs blocks
-    o1 = 0
-    for i in range(len(SNPcovList)):
+    o1, i = 0, 0
+    while i < len(snpcovs):
         o1 += 1
-        if i >= len(SNPcovList) - 1: break
-        while i < len(SNPcovList) - 1 and SNPcovList[i].snp_id == SNPcovList[i + 1].snp_id - 1:
+        while i + 1 < len(snpcovs) and snpcovs[i].snp_id + 1 == snpcovs[i + 1].snp_id:
             i += 1
-    
-    comps = list[tuple[int, list[int]]]()
-    for i in range(len(SNPcovList)):
-        comps.append((SNPcovList[i].snp_id, [SNPcovList[i].allele_id]))
-        if i >= len(SNPcovList) - 1: 
-            break            
-        while SNPcovList[i].snp_id == SNPcovList[i + 1].snp_id - 1:
-            comps[-1][1].append(SNPcovList[i + 1].allele_id)
+        i += 1
+    comps, i = list[tuple[int, list[int]]](), 0
+    while i < len(snpcovs):
+        comps.append((snpcovs[i].snp_id, [snpcovs[i].allele_id]))
+        while i + 1 < len(snpcovs) and snpcovs[i].snp_id + 1 == snpcovs[i + 1].snp_id:
+            comps[-1][1].append(snpcovs[i + 1].allele_id)
             i += 1
-            if i >= len(SNPcovList) - 1: break
-    yield (
+        i += 1
+    return Record(
         o1, 
         readName, 
         [(s[0], ''.join(str(a) for a in s[1])) for s in comps],
-        ''.join(q.qual for q in SNPcovList)
+        ''.join(q.qual for q in snpcovs)
     )
 
 
-def print_record(s, fout):
-    for l in s:
-        mid = ''.join(f'{i[0]} {i[1]}' for i in s[2])
-        fout.write(f'{s[0]} {s[1]} {mid} {s[3]}\n')
-
-
-def parse_vcf(sam: BAM, path: str):
+def parse_vcf(sam, path: str):
     chrs = dict[int, Chr]()
     snps = list[SNP]()
     chr_set = {str(s): i for i, s in enumerate(sam.targets)}
@@ -231,7 +244,7 @@ def parse_vcf(sam: BAM, path: str):
             curSNP = SNP(
                 line_i,
                 cur_chr, 
-                int(pos), 
+                int(pos) - 1, # VCF is 1-indexed!
                 [ref[0], alt[0], "" if len(alt) <= 1 else alt[2], "" if len(alt) <= 3 else alt[4]],
                 [False] * 4,
                 any(gt[k] != gt[k - 2] for k in range(2, len(gt), 2))
@@ -246,6 +259,48 @@ def parse_vcf(sam: BAM, path: str):
     return chrs, snps
 
 
+def process(
+    vcf: str, 
+    sam_path: str, 
+    het_snp_threshold: int, 
+    trans_report: bool = True, 
+    pcr_dup: bool = False, 
+    conflict_mate: bool = False
+):
+    with SAM(sam_path) as sam:
+        print f'Reading {vcf}...'
+        chrs, snps = parse_vcf(sam, vcf)
+    
+        prev_name, lines = "", list[SAMRecord](2)
+        for line_i, line in enumerate(sam):
+            # List of Het SNPs that are covered by the read together with the alleles
+            paired = prev_name == "" or line.name == prev_name
+            if not paired and len(line.name) > 2 and len(prev_name) > 2:
+                paired = line.name[:-2] == prev_name[:-2]
+                paired &= line.name[-2] == '/' and prev_name[-2] == '/'
+            prev_name = line.name
+            if paired:
+                lines.append(line)
+                if len(lines) > 2:
+                    raise ValueError(f'Read {line.name} has three paired records')
+                continue
+            
+            r = parse_pair(
+                lines, chrs, snps,
+                het_snp_threshold, trans_report, pcr_dup, conflict_mate
+            )
+            if r: yield r
+
+            lines.clear()
+            lines.append(line)
+        if lines:
+            r = parse_pair(
+                lines, chrs, snps,
+                het_snp_threshold, trans_report, pcr_dup, conflict_mate
+            )
+            if r: yield r
+
+
 def chair(
     vcf: str, 
     sam_path: str, 
@@ -255,42 +310,9 @@ def chair(
     pcr_dup: bool = False, 
     conflict_mate: bool = False
 ):
-    with BAM(sam_path) as sam:
-        print f'Reading {vcf}...'
-        chrs, snps = parse_vcf(sam, vcf)
-    
-        print f'Creating {output}...'
-        fout = open(output, 'w')
-        
-        prev_name = ""
-        lines = list[SAMRecord](2)
-        for line_i, line in enumerate(sam):
-            if line_i and line_i % 10000000 == 0:
-                print f"Processed {line_i} lines"
-
-            # List of Het SNPs that are covered by the read together with the alleles
-            paired = prev_name == "" or line.name == prev_name
-            if not paired and len(line.name) > 2 and len(prev_name) > 2:
-                paired = line.name[:-2] == prev_name[:-2]
-                paired &= line.name[-2] == '/' and prev_name[-2] == '/'
-            if paired:
-                prev_name = line.name
-                lines.append(line)
-                if len(lines) > 2:
-                    raise ValueError(f'Read {line.name} has three paired records')
-                continue
-            
-            print_record(parse_pair(
-                lines, chrs, snps,
-                het_snp_threshold, trans_report, pcr_dup, conflict_mate
-            ), fout)
-
-            prev_name = line.name
-            lines.clear()
-            lines.append(line)
-        if lines:
-            parse_pair(
-                lines, chrs, snps, fout, 
-                het_snp_threshold, trans_report, pcr_dup, conflict_mate
-            ) |> print_record(..., fout)
-        fout.close()
+    print f'Creating {output}...'
+    with open(output, 'w') as fout:
+        for s in process(vcf, sam_path, het_snp_threshold, trans_report, pcr_dup, conflict_mate):
+            mid = ' '.join([f'{i[0]} {i[1]}' for i in s.alleles])
+            fout.write(f'{s.size} {s.read} {mid} {s.qual}\n')
+    print S,P,Q
