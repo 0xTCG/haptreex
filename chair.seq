@@ -1,0 +1,296 @@
+"""
+This tool extracts reads from a SAM file that overlap heterozygous-SNPs within a given VCF file and output the extracted overlap information in a fragment matrix
+Fragmat output format -- Only needed for internal processing
+N [read name] ([Snp No] [alleles])^N [qualities]
+
+Default mode is going to run multi-allelic version
+Biallelic mode is going to make 0/2 and print it as if it is 0 and 1 but use the second allele
+"""
+
+import sys
+from bio import *
+from bio.bam import SAMRecord
+
+def usage():
+    print (
+        "This program extracts reads from a given SAM file that overlap "
+        "heterozygous-SNPs in a given VCF file\n"
+        "[1] Input VCF (chrName and position sorted) "
+        "(Format field should start with GT)\n"
+        "[2] Input read file (SAM format with no multiple mappings) "
+        "(any paired reads should be adjacent; "
+        "sorting a sam file by read names is satisfactory)\n"
+        "[3] Output fragment matrix file\n"
+        "[4] Minimum number of heterozygous SNPs a single/paired-end read needs "
+        "to overlap in order to be reported in the fragment matrix\n"
+        "[5+] Optional: TRANS_FILTER . Inter-chromosomal read pairs are filtered\n"
+        "     PCR_DUP_FILTER_ . Remove PCR duplicates from sam file "
+        "(should be marked in the SAM flag)\n"
+        "     CONFLICT_FILTER . If the two mates of a read have conflicting SNP "
+        "bi-alleles, the support for that SNP\n"
+    )
+    sys.exit(0)
+
+
+class SNP:
+    id: int
+    chr_id: int
+    pos: int
+    # [0] is reference and [1] [2] [3] are alternative alleles.
+    alleles: list[str]
+    # These flags specify whether the alleles above are valid 
+    # (1 if valid, if invalid, in the VCF but not in the genotype field) 
+    valid: list[bool]
+    isHet: bool
+
+
+class Chr:
+    id: int 
+    start: int 
+    end: int
+
+    def __str__(self: Chr):
+        return f'{self.id}: {self.start}..{self.end}'
+
+
+type SNPcov(snp_id: int, allele_id: int, qual: str):
+    def __lt__(self: SNPcov, o: SNPcov):
+        return self.snp_id < o.snp_id
+
+
+def find_interval(snps: list[SNP], c: Chr, pos: int, sz: int):
+    beg, end = c.start, c.end
+    while beg <= end:
+        mid = (beg + end) // 2
+        assert 0 <= mid < len(snps)
+        if snps[mid].pos >= pos and snps[mid].pos < pos + sz:
+            while mid > 0 and snps[mid - 1].pos >= pos and snps[mid - 1].pos < pos + sz:
+                mid -= 1
+            return mid
+        elif snps[mid].pos < pos: beg = mid + 1
+        else: end = mid - 1
+    # not found any snp within interval
+    return -1 
+    
+
+def process_sam(
+    sam: SAMRecord, 
+    snps: list[SNP], 
+    chrs: dict[int, Chr], 
+    SNPcovList: list[SNPcov]
+):
+    """Process the SAM line and add covered SNPs to the SNPcovList"""
+
+    if sam.unmapped or not len(sam.cigar):
+        return -1
+    read, ref = 0, 0
+    for sz, op in sam.cigar:
+        match op:
+            case 'M' or '=' or 'X':
+                # This is because quality string is equal length to the sequence 
+                # or is represented by '*' if it doesn't exist
+                assert len(sam.read) == len(sam.qual) or sam.qual == "*"
+                # interval endpoints for the binary search
+                if sam.tid not in chrs: continue
+                x = find_interval(snps, chrs[sam.tid], sam.pos + ref, sz)
+                while x != -1 and snps[x].pos >= sam.pos + ref and snps[x].pos < sam.pos + ref + sz:
+                    if not snps[x].isHet: 
+                        x += 1
+                        continue
+                    # if it's heterozygous, is no reason to add self to the list    
+                    t = snps[x].pos - sam.pos - ref + read
+                    allele = [
+                        i for i in range(4) 
+                        if str(sam.read[t]) == snps[x].alleles[i] and snps[x].valid[i]
+                    ]
+                    if len(allele):
+                        qual = '.' if sam.qual == "*" else sam.qual[t]
+                        SNPcovList.append(SNPcov(snps[x].id, allele[0], qual))
+                    x += 1
+                read += sz
+                ref += sz
+            case 'I' or 'S': read += sz
+            case 'D' or 'N' or 'H' or 'P': ref += sz
+            case _: pass
+    return sam.tid
+
+
+def parse_pair(
+    lines: list[SAMRecord], 
+    chrs: dict[int, Chr], 
+    snps: list[SNP], 
+    het_snp_threshold: int, 
+    trans_report: bool, 
+    pcr_dup: bool,
+    conflict_mate: bool
+) -> generator[tuple[int, str, list[int, str], str]]:
+    SNPcovList = list[SNPcov]()
+    readName = lines[0].name
+    if len(lines) > 1:
+        if pcr_dup:
+            if lines[0].duplicate and lines[1].duplicate:
+                return
+            elif lines[0].duplicate:
+                print f"Warning: Only one pair of {readName} is marked as PCR duplicate"
+        chr1 = process_sam(lines[0], snps, chrs, SNPcovList)
+        len1 = len(SNPcovList)
+
+        chr2 = process_sam(lines[1], snps, chrs, SNPcovList)
+        len2 = len(SNPcovList) - len1
+        if chr1 != chr2 and not trans_report:
+            return
+        # Adding an MP suffix like extractHairs to specify that matepairs are merged
+        if len1 and len2:
+            readName += "_MP"
+    else:
+        if pcr_dup and lines[0].duplicate:
+            return
+        process_sam(lines[0], snps, chrs, SNPcovList)
+        
+    # Output printing is done in the same way for single and paired-end reads       
+    # Count valid SNPs here and eliminate if needed
+    used = [False] * len(SNPcovList)
+    for i in range(1, len(SNPcovList)):
+        if SNPcovList[i].snp_id != SNPcovList[i - 1].snp_id:
+            continue
+        if conflict_mate and SNPcovList[i].allele_id != SNPcovList[i - 1].allele_id:
+            used[i - 1] = used[i] = True
+        else:
+            # Keep the one that has higher quality. 
+            # Works for both inconsistent and consistent alleles
+            used[i - 1 if SNPcovList[i].qual > SNPcovList[i - 1].qual else i] = True
+    SNPcovList = [s for u, s in zip(used, SNPcovList) if not u]
+    # Single reads are not printed -- it might change for RNA-seq
+    if len(SNPcovList) < het_snp_threshold:
+        return
+    # Output function here
+    # o1 = the number of extractHairs blocks
+    o1 = 0
+    for i in range(len(SNPcovList)):
+        o1 += 1
+        if i >= len(SNPcovList) - 1: break
+        while i < len(SNPcovList) - 1 and SNPcovList[i].snp_id == SNPcovList[i + 1].snp_id - 1:
+            i += 1
+    
+    comps = list[tuple[int, list[int]]]()
+    for i in range(len(SNPcovList)):
+        comps.append((SNPcovList[i].snp_id, [SNPcovList[i].allele_id]))
+        if i >= len(SNPcovList) - 1: 
+            break            
+        while SNPcovList[i].snp_id == SNPcovList[i + 1].snp_id - 1:
+            comps[-1][1].append(SNPcovList[i + 1].allele_id)
+            i += 1
+            if i >= len(SNPcovList) - 1: break
+    yield (
+        o1, 
+        readName, 
+        [(s[0], ''.join(str(a) for a in s[1])) for s in comps],
+        ''.join(q.qual for q in SNPcovList)
+    )
+
+
+def print_record(s, fout):
+    for l in s:
+        mid = ''.join(f'{i[0]} {i[1]}' for i in s[2])
+        fout.write(f'{s[0]} {s[1]} {mid} {s[3]}\n')
+
+
+def parse_vcf(sam: BAM, path: str):
+    chrs = dict[int, Chr]()
+    snps = list[SNP]()
+    chr_set = {str(s): i for i, s in enumerate(sam.targets)}
+    with open(path, 'r') as f:
+        # Since chroms are sorted in vcf, will increase as we intercept snps
+        prev_chr = -1
+        for line_i, line in enumerate(f):
+            if line[0] == '#': 
+                continue
+            l = line.split('\t')
+            if len(l) < 10:
+                raise ValueError(f'VCF file malformed at line {line_i}')
+            chr_name, pos, _, ref, alt, _, _, _, fmt, content = l[:10]
+            if len(ref) != 1:
+               continue 
+            if any(alt[i] != ',' for i in range(1, len(alt), 2)):
+                continue
+            # alternative allele list can't contain the reference allele
+            if len(alt) % 2 != 1 or len(alt) > 5 or ref in alt:
+                continue
+            if chr_name not in chr_set:
+                continue
+            cur_chr = chr_set[chr_name]
+            if cur_chr != prev_chr:
+                chrs[cur_chr] = Chr(cur_chr, len(snps), -1)
+                if prev_chr != -1:
+                    chrs[prev_chr].end = len(snps) - 1
+                prev_chr = cur_chr
+
+            gt = content.split(':')[0]
+            if fmt[:2] != 'GT' or len(gt) % 2 != 1:
+                raise ValueError(f'VCF file malformed at line {line_i}')
+            curSNP = SNP(
+                line_i,
+                cur_chr, 
+                int(pos), 
+                [ref[0], alt[0], "" if len(alt) <= 1 else alt[2], "" if len(alt) <= 3 else alt[4]],
+                [False] * 4,
+                any(gt[k] != gt[k - 2] for k in range(2, len(gt), 2))
+            )
+            for k in range(0, len(gt), 2):
+                k = ord(gt[k]) - ord('0')
+                assert curSNP.alleles[k]
+                curSNP.valid[k] = True
+            snps.append(curSNP)
+        if prev_chr in chrs:
+            chrs[prev_chr].end = len(snps) - 1
+    return chrs, snps
+
+
+def chair(
+    vcf: str, 
+    sam_path: str, 
+    output: str,
+    het_snp_threshold: int, 
+    trans_report: bool = True, 
+    pcr_dup: bool = False, 
+    conflict_mate: bool = False
+):
+    with BAM(sam_path) as sam:
+        print f'Reading {vcf}...'
+        chrs, snps = parse_vcf(sam, vcf)
+    
+        print f'Creating {output}...'
+        fout = open(output, 'w')
+        
+        prev_name = ""
+        lines = list[SAMRecord](2)
+        for line_i, line in enumerate(sam):
+            if line_i and line_i % 10000000 == 0:
+                print f"Processed {line_i} lines"
+
+            # List of Het SNPs that are covered by the read together with the alleles
+            paired = prev_name == "" or line.name == prev_name
+            if not paired and len(line.name) > 2 and len(prev_name) > 2:
+                paired = line.name[:-2] == prev_name[:-2]
+                paired &= line.name[-2] == '/' and prev_name[-2] == '/'
+            if paired:
+                prev_name = line.name
+                lines.append(line)
+                if len(lines) > 2:
+                    raise ValueError(f'Read {line.name} has three paired records')
+                continue
+            
+            print_record(parse_pair(
+                lines, chrs, snps,
+                het_snp_threshold, trans_report, pcr_dup, conflict_mate
+            ), fout)
+
+            prev_name = line.name
+            lines.clear()
+            lines.append(line)
+        if lines:
+            parse_pair(
+                lines, chrs, snps, fout, 
+                het_snp_threshold, trans_report, pcr_dup, conflict_mate
+            ) |> print_record(..., fout)
+        fout.close()

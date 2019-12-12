@@ -40,8 +40,8 @@ def clusters_rate(
     return clusters
 
 
-def new_score(pair: list[int], rates: dict[int, float], conf: float) -> float:
-    r = conf * max(min(rates.values()), 0.05) + 0.5 * (1 - conf)
+def new_score(pair: list[int], rates: tuple[float, float], conf: float) -> float:
+    r = conf * max(min(rates), 0.05) + 0.5 * (1 - conf)
     k, n = min(pair), sum(pair)
     return max(-(n - 2 * k) * log(r / (1 - r)), log(2.0))
 
@@ -73,7 +73,7 @@ def update_snps_to_use_rate(
     high_confidence_starts = [ 
         start
         for start in snps_to_use
-        if max(RD.rates[start].values()) >= rate_cutoff
+        if max(RD.rates[start]) >= rate_cutoff
     ]
     return {start: snps_to_use[start] for start in high_confidence_starts}
 

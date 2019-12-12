@@ -24,7 +24,7 @@ def read_val_tail(
     this log prob gets added to the log prob of the non-extended phasing.
     """
 
-    _t = _C.seq_time()
+    #_t = _C.seq_time()
 
     a = (1 - error) / (1 - (2 * error / 3.0))
     b = (error / 3.0) / (1 - (2 * error / 3.0))
@@ -48,14 +48,14 @@ def read_val_tail(
     # p is some measure of likelihood of adjacent mutations occuring together
     # since we've know extended the haplotype we need to update the prior
     if len(partial_phase[0]) > 1:
+        assert m_prev != -1
         val += log(p if partial_phase[0][m] == partial_phase[0][m_prev] else 1 - p)
     
-    global TR
-    TR += _C.seq_time() - _t
+    #global TR
+    #TR += _C.seq_time() - _t
     return val - val2
 
 
-# def branch(m: int,m_prev: Optional[int],LISTS: Union[list[dict[int, dict[int, int]]], list[dict[int, DUMMY_NAME]]],DICT: dict[int, Union[int, float]],threshold: float,p: float,error: float,read_dict: dict[int, list[Read]]) -> tuple[list[dict[int, dict[int, int]]], dict[int, float]]:
 def branch(
     m: int,
     m_prev: int,
@@ -72,9 +72,6 @@ def branch(
     lists include all current solutions
     dict has list index of solutions and their likelihoods
     """
-    
-    _t = _C.seq_time()
-    global TP
 
     # partial_phase[_][m] | partial_phase[_][k for R.mini_reads[m] for R in relevant_reads]
     # relevante updates: 
@@ -104,8 +101,8 @@ def branch(
                 extended_phase[0][m], extended_phase[1][m] = configs[i]
                 new_table.append(table[pi] - costs[i])
                 new_lists.append(extended_phase)
-    global TB
-    TB += _C.seq_time() - _t
+    # global TB
+    # TB += _C.seq_time() - _t
     return new_lists, new_table
 
 

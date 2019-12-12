@@ -105,7 +105,7 @@ def NW(vec: dict[int, list[int]], rate: float) -> float:
     return mid
 
 
-def find_rates(snps: list[int], reads: list[Read], rate: float) -> dict[int, float]:
+def find_rates(snps: list[int], reads: list[Read], rate: float) -> tuple[float, float]:
     ##if sufficient coverage, approximation works well
     ##snps must be sorted
     lb_for_approx = 200
@@ -119,5 +119,5 @@ def find_rates(snps: list[int], reads: list[Read], rate: float) -> dict[int, flo
         r = approx_rate(list(counts.values()))
     else:
         r = NW(counts, rate)
-
-    return {0: r, 1: 1 - r}  ##had swapped
+    
+    return r, 1 - r

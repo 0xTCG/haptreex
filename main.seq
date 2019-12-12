@@ -11,14 +11,14 @@ import os
 import sys
 import random
 from getopt import getopt, GetoptError
-# import chair
+import chair
 
 print 'HapTree-X v1.0 [Seq]'
 random.seed(51)
 
 def parse_args() -> tuple[str, str, str, str, str, str]:
     try:
-        match sys.argv.arr: # cannot match array pattern with non-array value
+        match sys.argv: # cannot match array pattern with non-array value
             case [_, "chair", ...]:
                 opts, args = getopt(sys.argv[2:], "hv:s:t:TPC", 
                     ["help", "vcf=", "sam=", "threshold=", "TRANS=", "PCR=", "CONFLICT="]
@@ -39,8 +39,8 @@ def parse_args() -> tuple[str, str, str, str, str, str]:
                 if len(args) != 1:
                     raise ValueError('Output argument missing')
                 outputname = args[0]
-                # with timing('Chair'):
-                    # chair.chair(vcf, sam, threshold, trans, pcr, conflict)
+                with timing('Chair'):
+                    chair.chair(vcf, sam, outputname, threshold, trans, pcr, conflict)
                 sys.exit(0)
             case [_, "phase", ...]:
                 opts, args = getopt(sys.argv[2:], "hv:d:r:g:i:", 

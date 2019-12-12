@@ -9,7 +9,7 @@ class Read:
     read_num: int
     mini_reads: dict[int, dict[int, int]]
     special_key: int
-    rates: dict[int, float]
+    rates: tuple[float, float]
 
     ## for normal reads, the read_dict doesnt include starts of reads
     def __init__(self: Read, read: dict[int, int], count: int, read_num: int):
@@ -21,7 +21,7 @@ class Read:
         self.read_num = read_num
         self.mini_reads = self.make_mini_reads()
         self.special_key = self.keys[0]
-        self.rates = {0: 0.5, 1: 0.5}
+        self.rates = (0.5, 0.5)
 
     def __eq__(self: Read, other: Read):
         return self.read == other.read and self.read_num == other.read_num

@@ -41,7 +41,7 @@ class RNAData:
     read_dict: dict[int, list[Read]]
     counts: dict[int, list[int]]
     LLsnp: dict[int, float]
-    rates: dict[int, dict[int, float]]
+    rates: dict[int, tuple[float, float]]
 
     components: dict[int, list[int]]
     comp_mins: list[int]
@@ -74,7 +74,7 @@ class RNAData:
         long_read_list = dict[int, Read]()
         for i in read_list:
             r = read_list[i]
-            r.rates = {0: 0.5, 1: 0.5}
+            r.rates = (0.5, 0.5)
             if len(r.keys) == 1:
                 short_read_list[i] = r
             else:
@@ -249,20 +249,16 @@ class RNAData:
                 LL[snp] = score(self.counts[snp])
         return LL  # LL_gr,LL
 
-    def assign_rates2(
-        self: RNAData, snps_to_use: dict[int, list[int]]
-    ) -> dict[int, dict[int, float]]:
-        rates = dict[int, dict[int, float]]()
+    def assign_rates2(self: RNAData, snps_to_use: dict[int, list[int]]):
+        rates = dict[int, tuple[float, float]]()
         for start in snps_to_use:
             snps = sorted(snps_to_use[start])
             reads = [r for s in snps for r in self.read_dict[s]]
-            r = find_rates(snps, reads, 0.6)  ##Choose adjacent snp rate
-            # print f'{start} {snps} {reads} {r}'
+            r = find_rates(snps, reads, 0.6)  ## Choose adjacent snp rate
             for s in snps:
                 rates[s] = r
             for read in reads:
                 read.rates = r
-        #self.times = times
         return rates
 
     ############################################################

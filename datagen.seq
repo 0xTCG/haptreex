@@ -228,7 +228,7 @@ def make_data_from_fragmat(
             read_list[zz + max_key] = RNA_readlist[zz]
     for r in read_list.values():
         r.special_key = r.keys[1]
-        r.rates = {0: 0.5, 1: 0.5}
+        r.rates = (0.5, 0.5)
 
     print f"Loading VCF file {vcf}"
     S, names, chroms, positions, k = positions_names_states(vcf)
