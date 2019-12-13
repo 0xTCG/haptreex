@@ -2,11 +2,9 @@ from math import log
 from read import Read
 from common import CONFIDENCE
 from time import timing
+from random import randint
 import sys
 
-TB = 0
-TP = 0 
-TR = 0
 
 def read_val_tail(
     partial_phase: tuple[dict[int, int], dict[int, int]],
@@ -23,8 +21,6 @@ def read_val_tail(
     (relevant reads for the extension)
     this log prob gets added to the log prob of the non-extended phasing.
     """
-
-    #_t = _C.seq_time()
 
     a = (1 - error) / (1 - (2 * error / 3.0))
     b = (error / 3.0) / (1 - (2 * error / 3.0))
@@ -49,10 +45,8 @@ def read_val_tail(
     # since we've know extended the haplotype we need to update the prior
     if len(partial_phase[0]) > 1:
         assert m_prev != -1
-        val += log(p if partial_phase[0][m] == partial_phase[0][m_prev] else 1 - p)
+        val += log(p if partial_phase[0][m] == partial_phase[0][m_prev] else (1 - p))
     
-    #global TR
-    #TR += _C.seq_time() - _t
     return val - val2
 
 
@@ -101,8 +95,6 @@ def branch(
                 extended_phase[0][m], extended_phase[1][m] = configs[i]
                 new_table.append(table[pi] - costs[i])
                 new_lists.append(extended_phase)
-    # global TB
-    # TB += _C.seq_time() - _t
     return new_lists, new_table
 
 
@@ -137,7 +129,7 @@ def prune(
             nlists.append(l)
             ntable.append(table[i])
     if go:
-        ni = 0 # random.randint(0, len(new_lists)-1)
+        ni = randint(0, len(nlists) - 1)
         nlists, ntable = [nlists[ni]], [ntable[ni]]
     return nlists, ntable
 
@@ -176,5 +168,5 @@ def RNA_phase(
     print f'using {len(comp_mins)} workers...'
     enumerate(comp_mins) ||> parallel(threshold, p, error, read_dict, components, output)
 
-    print f'timings: {TB/1e9} {TP/1e9} {TR/1e9}'
+    # print f'timings: {TB/1e9} {TP/1e9} {TR/1e9}'
     return dict(output)

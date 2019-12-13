@@ -270,9 +270,12 @@ def process(
     with SAM(sam_path) as sam:
         print f'Reading {vcf}...'
         chrs, snps = parse_vcf(sam, vcf)
-    
+
         prev_name, lines = "", list[SAMRecord](2)
         for line_i, line in enumerate(sam):
+            if line.supplementary: # ignore multi-reads
+                continue
+    
             # List of Het SNPs that are covered by the read together with the alleles
             paired = prev_name == "" or line.name == prev_name
             if not paired and len(line.name) > 2 and len(prev_name) > 2:
