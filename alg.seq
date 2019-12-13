@@ -152,7 +152,7 @@ def parallel(
     output: list[tuple[int, tuple[dict[int, int], dict[int, int]]]]
 ):
     lists, table = [(dict[int, int](), dict[int, int]())], [0.0]
-    skipped = True  # set to True to allow allele permutations
+    skipped = True  # set to True to allow allele permutations; changed from original False
     m_prev = -1 # SEQ/TODO: check! originally None
     for m in components[start[1]]:
         if skipped:
