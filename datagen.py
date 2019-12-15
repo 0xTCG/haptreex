@@ -1,239 +1,269 @@
 from gene import Gene
-from read import Read
+from read import SNP, Read
 from rna import RNAData
 from graph import Data, edges_from_readlist
 from common import QUALITY_CUTOFF
-from time import timing
-
-_t = timing()
-
-###########################################################################
-# GENES
-
-def determine_genes_gtf(gene_data: str, chroms: set[str]) -> dict[int, Gene]:
-    print "Loading and formatting genes"
-    
-    b = [a[:-2].split("\t") for i, a in enumerate(open(gene_data, "r")) if a[0] != '#']
-    trans_list = list[int]()
-    trans_dict = dict[int, dict[str, list[int]]]()
-
-    for j, y in enumerate(b):
-        if y[2] == "transcript":
-            trans_list.append(j)
-            trans_dict[j] = {"exon_starts": list[int](), "exon_lengths": list[int]()}
-    for k in range(len(trans_list) - 1):
-        start = trans_list[k]
-        end = trans_list[k + 1]
-        for j in range(start, end):
-            y = b[j]
-            if y[2] == "exon":
-                exon_start = int(y[3])
-                exon_end = int(y[4])
-                exon_length = exon_end - exon_start + 1
-                trans_dict[start]["exon_starts"].append(exon_start)
-                trans_dict[start]["exon_lengths"].append(exon_length)
-
-    start = trans_list[-1]
-    end = len(b)
-    for j in range(start, end):
-        y = b[j]
-        if y[2] == "exon":
-            exon_start = int(y[3])
-            exon_end = int(y[4])
-            exon_length = exon_end - exon_start + 1
-            trans_dict[start]["exon_starts"].append(exon_start)
-            trans_dict[start]["exon_lengths"].append(exon_length)
-
-    transcripts = dict[int, Gene]()
-    for j in trans_dict:
-        y = b[j]
-        chrom = y[0]
-        if chrom in chroms:
-            bp_start = int(y[3])
-            bp_end = int(y[4])
-            sign = y[6]
-            z = y[8]
-            w = z.split("; ")
-            v = [xx.split(" ") for xx in w]
-            gene_id = v[0][1][1:-1]
-            transcript_id = v[1][1][1:-1]
-            gene_type = v[2][1][1:-1]
-            exon_starts = trans_dict[j]["exon_starts"]
-            exon_count = len(trans_dict[j]["exon_lengths"])
-            exon_lengths = trans_dict[j]["exon_lengths"]
-            transcripts[j] = Gene(
-                transcript_id,
-                chrom,
-                bp_start,
-                bp_end,
-                sign,
-                exon_count,
-                exon_lengths,
-                exon_starts,
-                gene_id,
-                gene_type
-            )
-            transcripts[j].index = j
-    return transcripts
+from mytime import timing
+from dataclasses import dataclass
+from typing import Tuple, Dict, List, Set, NamedTuple, Optional, Iterator
+import pysam
+import bisect
+import sys
+from pprint import pprint
 
 
-def build_isodict(isoforms: str) -> dict[str, tuple[float, str]]:
-    isodict = dict[str, tuple[float, str]]()
-    with open(isoforms) as f:
-        temp = [x.split("\t") for x in f.readlines()]
-        for i in range(1, len(temp)):
-            isodict[temp[i][0]] = float(temp[i][9]), temp[i][3]
-    return isodict
+def parse_vcf(
+    vcf_path: str,
+    sample: Optional[str] = None
+) -> Tuple[Dict[str, List[SNP]], List[Tuple[str, int]]]:
+    """
+    Parse a VCF file and return a dictionary of sorted SNPs:
+        d := {chromosome_name: sorted([snp_1, snp_2])}
+    and the corresponding line index
+        [line_in_vcf: (chr, index in d[chr]), ...].
+    Each snp_i is a SNP that is heterozygous in the sample (i.e. |set(GT(snp_i))| > 1).
+    """
+
+    snps: Dict[str, List[SNP]] = {}
+    index: List[Tuple[str, int]] = {}
+    with pysam.VariantFile(vcf_path) as vcf:
+        samples = list(vcf.header.samples)
+        if not samples:
+            raise ValueError('No samples present in the VCF file')
+        if sample and sample not in samples:
+            raise ValueError(f'Sample {sample} not found in the VCF')
+        sample = sample if sample else samples[0]
+        print(f'Using sample {sample} in {vcf_path}...')
+        for rec in vcf:
+            if len(rec.ref) != 1: continue # Ignore indels
+            # We only deal with SNPs here for now
+            gt = rec.samples[sample]['GT']
+            # Get only alleles that are specified in GT field
+            alleles = [a for i, a in enumerate(rec.alleles) if i in gt and len(a) == 1]
+            if len(alleles) > 1: # Ignore homozygous SNPs
+                snp = SNP(rec.chrom, rec.pos - 1, rec.id, alleles)
+                if rec.chrom not in snps:
+                    snps[rec.chrom] = [snp]
+                elif snp < snps[rec.chrom][-1]:
+                    raise ValueError(f'VCF is not sorted (SNP {snp})')
+                else:
+                    snps[rec.chrom].append(snp)
+                index.append((rec.chrom, len(snps[rec.chrom])))
+    return snps, index
 
 
-def filter_transcripts(genes, isodict: dict[str, tuple[float, str]]) -> dict[int, Gene]:
-    gene_cov = {isodict[i][1]: 0.0 for i in isodict}
-    for i in isodict:
-        gene_cov[isodict[i][1]] += isodict[i][0]
+def parse_read(
+    lines, #: List[SAMRecord],
+    snps: Dict[str, List[SNP]],
+    threshold: int,
+    ignore_conflicts: bool = True
+) -> Iterator[Tuple[str, List[Tuple[SNP, int, str]]]]:
+    """
+    If reads are valid and pass the threshold filter, yields the
+        (read_name, [all_1, all_2, ...])
+    where
+        all_i := (snp, allele, quality).
+    Example:
+        ('read1', [(SNP("chr1", 12), 'A', 'E'), ...])
+    """
 
-    new_genes = dict[int, Gene]()
-    types = set[str]()
-    for j in genes:
-        g = genes[j]
-        tid = g.transcript_id
-        types.add(genes[j].gene_type)
-        if tid in isodict:
-            val = isodict[tid][0]
-            if val > 0:
-                if val / gene_cov[isodict[tid][1]] > 0.01:
-                    new_genes[j] = g
-    return new_genes
+    cov: Dict[SNP, Dict[int, List[str]]] = {} # SNP: {allele: [qual1, qual2, ...]}
+    name = lines[0].query_name
+    counts = [0] * len(lines)
+    for line_i, sam in enumerate(lines):
+        read, ref = 0, 0
+        cand = snps[sam.reference_name]
+        for op, sz in sam.cigartuples:
+            if op in [0, 7, 8]: #'M=X':
+                s = SNP(sam.reference_name, sam.pos + ref, "", [])
+                x = bisect.bisect_left(cand, s)
+                for i in range(x, len(cand)):
+                    snp = cand[i]
+                    if snp.pos >= sam.pos + ref + sz:
+                        break
+                    t = snp.pos - sam.pos - ref + read
+                    if sam.seq[t] in snp.alleles:
+                        allele = snp.alleles.index(sam.seq[t])
+                        qual = sam.qual[t] if sam.qual != '*' else '.'
+                        cov.setdefault(snp, {}).setdefault(allele, []).append(qual)
+                        counts[line_i] += 1
+                read += sz
+                ref += sz
+            elif op in [1, 4]: #'IS':
+                read += sz
+            elif op in [2, 3, 5, 6]: #'DNHP':
+                ref += sz
+    # Adding an MP suffix like extractHairs to specify that matepairs are merged
+    if len(counts) > 1 and counts[0] > 0 and counts[1] > 0:
+        name += "_MP"
+    # Filter out SNPs that harbour mate-pair allele conflicts
+    for snp in list(cov):
+        if ignore_conflicts and len(cov[snp]) > 1:
+            del cov[snp]
+    if len(cov) >= threshold:
+        yield name, [(snp, a, max(q)) for snp, A in cov.items() for a, q in A.items()]
 
 
-###########################################################################
-# READS
+def parse_bam(
+    sam_path: str,
+    snps: Dict[str, List[SNP]],
+    threshold: int = 1,
+    ignore_chimeric: bool = True,
+    ignore_duplicates: bool = True,
+    ignore_conflicts: bool = True
+) -> Iterator[Tuple[str, List[Tuple[SNP, int, str]]]]:
+    """
+    Reads a sorted SAM/BAM.
+    """
+
+    seen = {} #S Dict[str, SAMRecord]
+    seen_chrs: Set[str] = {}
+    with pysam.AlignmentFile(sam_path) as sam:
+        for line in sam:
+            if line.reference_name not in seen_chrs:
+                print(f'Parsing {line.reference_name}, {len(seen)} cached so far...')
+            seen_chrs.add(line.reference_name)
+            name = sam.query_name
+            if len(name) > 2 and name[-2] in '#/':
+                name = name[:-2]
+
+            if (
+                line.is_supplementary
+                or (ignore_duplicates and line.is_duplicate)
+                or (ignore_chimeric and line.reference_name != line.next_reference_name)
+                or line.is_unmapped
+                or not line.cigartuples
+                or line.reference_name not in snps
+            ):
+                if not line.is_supplementary and not line.mate_is_unmapped and name in seen:
+                    yield from parse_read([seen[name]], snps, threshold, ignore_conflicts)
+                    del seen[name]
+                continue
+            elif name in seen:
+                yield from parse_read([seen[name], line], snps, threshold, ignore_conflicts)
+                del seen[name]
+            elif (
+                not line.mate_is_unmapped
+                and line.reference_name == line.next_reference_name
+                line.mpos < line.pos
+            ):
+                yield from parse_read([line], snps, threshold, ignore_conflicts)
+            elif (
+                not line.mate_is_unmapped
+                and line.reference_name != line.next_reference_name
+                and line.next_reference_name in seen_chrs
+            ):
+                yield from parse_read([line], snps, threshold, ignore_conflicts)
+            else:
+                seen[name] = line
+    for line in seen:
+        yield from parse_sam_pair([line], snps, threshold, ignore_conflicts)
 
 
-def make_read_of_frag(frag0: str) -> tuple[list[tuple[int, int]], int]:
-    frag = frag0.split(" ")[2:]
-    # takes line from fragment matrix and makes tuple formatted read
-    read = list[tuple[int, int]]()
-    qual = frag[-1][0]
-    frag = frag[:-1]
-    if len(frag) % 2 == 1:
-        raise ValueError(f"fragment file error: {frag}")
-
-    for i in range(0, len(frag), 2):
-        key = int(frag[i])
-        for char in frag[i + 1]:
-            read.append((key - 1, int(char)))
-            key += 1
-    return read, ord(qual) if len(read) == 1 else 1000
-
-
-def make_readlist_from_fragmat(
-    fragmats: list[str],
+def parse_fragmat(
+    fragmat: str,
+    snp_index: List[Tuple[str, int]],
+    snps: Dict[str, List[SNP]],
     skip_single: bool
-) -> dict[int, Read]:
-    # translates fragment matrix into a list of reads
-    print "Loading and formatting fragments"
-    a = list[str]()
-    for fragmat in fragmats:
-        with open(fragmat, "r") as f:
-            a += list(f.readlines())
+) -> Iterator[Tuple[str, List[Tuple[SNP, int, str]]]]:
+    # translates fragment matrix into a List of reads
+    print(f"Loading and formatting fragments...")
+    read_list_list: List[List[Tuple[int, int]]] = []
+    with open(fragmat, "r") as f:
+        for r in f:
+            frag = r.split()
+            name, qual, frag = frag[1] frag[-1], frag[2:-1]
+            if len(frag) % 2 == 1:
+                raise ValueError(f"fragment file error: {frag}")
+            if len(qual) == 1 and ord(qual) < QUALITY_CUTOFF: # TODO: fix this
+                continue
 
-    F = len(a)
-    read_list_list = list[list[tuple[int, int]]]()
-    i = 0
-    for r in a:
-        i += 1
-        read, qual = make_read_of_frag(r)
-        if qual >= QUALITY_CUTOFF:
-            if not skip_single or len(read) > 1:
-                read_list_list.append(read)
+            alleles = []
+            for i in range(0, len(frag), 2):
+                if not 0 <= frag[i] < len(snp_index):
+                    raise ValueError(f'Invalid SNP index {frag[i]} for read {name}')
+                chr, idx = snp_index[int(frag[i])]
+                for j, allele in enumerate(frag[i + 1]):
+                    s = snps[chr][idx + j - 1]
+                    if not 0 <= int(allele) < len(s.alleles):
+                        raise ValueError(f'Invalid allele {allele} for SNP {s}')
+                    alleles.append((s, int(allele), qual[len(alleles)]))
+            yield name, alleles
 
-    print f"{len(read_list_list)} reads of sufficient quality"
-    read_list = dict[int, Read]()
-    read_counter = dict[list[tuple[int, int]], int]()
-    for tup_read in read_list_list:
-        if tup_read not in read_counter:
-            read_counter[tup_read] = 0
-        read_counter[tup_read] += 1
-    print f"{len(read_counter)} distinct reads"
-    for i, tup in enumerate(read_counter):
-        read = {k: v for k, v in tup}
-        read_list[i] = Read(read, read_counter[tup], i)
-    return read_list
+
+def parse_phases(
+    vcf: Tuple[Dict[str, List[SNP]], List[Tuple[str, int]]],
+    paths: List[str],
+    skip_single: bool = True
+) -> Iterator[Read]:
+    snps, snp_index = vcf
+    reads = []
+    for path in paths:
+        print(f'Parsing {path}...')
+        for _, alleles in parse_bam(path, snps):
+            if not (skip_single and len(alleles) <= 1):
+                reads.append(alleles)
+    print(f"{len(reads)} reads of sufficient quality")
+
+    read_counter = {} #S : Dict[List[Tuple[int, int]], int] = {}
+    for r in reads: #S
+        key = tuple((s, a) for s, a, _ in r)
+        if key not in read_counter:
+            read_counter[key] = 1
+        else:
+            read_counter[key] += 1
+    print(f"{len(read_counter)} distinct reads")
+
+    for i, (tup, cnt) in enumerate(read_counter.items()):
+        yield Read(dict(tup), cnt, i)
 
 
 ###########################################################################
 # make RNA_data and DNA_data objects
 
 
-def positions_names_states(
-    vcf: str
-) -> tuple[dict[int, int], dict[int, str], dict[int, str], dict[int, int], int]:
-    # reading data from VCF file and formatting as lists
-    a = list[str]()
-    with open(vcf, "r") as f:
-        a += list(f.readlines())
-    i = 0
-    while a[i][0] == "#":
-        i += 1
-    b = [x.split("\t") for x in a[i:]]
-    positions = dict[int, int]()
-    states = dict[int, int]()
-    names = dict[int, str]()
-    chroms = dict[int, str]()
-    for i in range(len(b)):
-        line = b[i]
-        positions[i] = int(line[1])
-        names[i] = line[2]  ##change when fixed files
-        chroms[i] = line[0]
-        states[i] = 1  # sum(line[9]) ??
-    k = 2
-    return (states, names, chroms, positions, k)
+# def make_RNA_data_from_fragmat(
+#     gene_data: str,
+#     fragmats: List[str],
+#     vcf: str,
+#     error: float,
+#     isoforms: str
+# ) -> RNAData:
+#     read_list = make_readlist_from_fragmat(fragmats, skip_single=False) # 4s
+#     print(f"Loading VCF file {vcf}")
+#     S, names, chroms, positions, k = positions_names_states(vcf) # 3s
+#     print("Preparing data for ReadGraph")
+#     genes = determine_genes_gtf(gene_data, set(chroms.values())) # 42s
+
+#     isodict: Dict[str, Tuple[float, str]] = {}
+#     filtered_genes = genes
+#     if isoforms != "":
+#         print("Building IsoDict")
+#         isodict = build_isodict(isoforms)
+#         filtered_genes = filter_transcripts(genes, isodict)
+
+#     return RNAData(
+#         S, genes, filtered_genes, error, read_list, positions, names, chroms, isodict
+#     )
 
 
-def make_RNA_data_from_fragmat(
-    gene_data: str,
-    fragmats: list[str],
-    vcf: str,
+def load_dna_data(
+    vcf_path: str,
+    paths: List[str],
     error: float,
-    isoforms: str
-) -> RNAData:
-    read_list = make_readlist_from_fragmat(fragmats, skip_single=False) # 4s
-    print f"Loading VCF file {vcf}"
-    S, names, chroms, positions, k = positions_names_states(vcf) # 3s
-    print "Preparing data for ReadGraph"
-    genes = determine_genes_gtf(gene_data, set(chroms.values())) # 42s
-    
-    isodict = dict[str, tuple[float, str]]()
-    filtered_genes = genes
-    if isoforms != "":
-        print "Building IsoDict"
-        isodict = build_isodict(isoforms)
-        filtered_genes = filter_transcripts(genes, isodict)
-    
-    return RNAData(
-        S, genes, filtered_genes, error, read_list, positions, names, chroms, isodict
-    )
+    RNA_readlist: Dict[int, Read] = None
+) -> Graph:
+    print(f"Loading VCF file {vcf_path}"...)
+    vcf = parse_vcf(vcf_path)
+    print(f"{len(vcf[1])} SNPs in VCF file")
 
+    reads = list(parse_phases(vcf, paths, skip_single=True))
+    # if len(RNA_readlist) > 0:
+    #     max_key = max(reads.keys())
+    #     for zz in RNA_readlist:
+    #         reads[zz + max_key] = RNA_readlist[zz]
+    for r in reads.values():
+        r.special_snp = sorted(r.snps)[1]
+        r.rates = [0.5, 0.5]
 
-def make_data_from_fragmat(
-    fragmat: list[str],
-    vcf: str,
-    error: float,
-    RNA_readlist: dict[int, Read] = dict[int, Read]()
-) -> Data:
-    read_list = make_readlist_from_fragmat(fragmat, skip_single=True)
-    if len(RNA_readlist) > 0:
-        max_key = max(read_list.keys())
-        for zz in RNA_readlist:
-            read_list[zz + max_key] = RNA_readlist[zz]
-    for r in read_list.values():
-        r.special_key = r.keys[1]
-        r.rates = (0.5, 0.5)
-
-    print f"Loading VCF file {vcf}"
-    S, names, chroms, positions, k = positions_names_states(vcf)
-    n = len(S)
-    print f"{n} SNPs in VCF file"
-
-    D = edges_from_readlist(read_list)
-    return Data(D, S, k, error, read_list, positions, names, chroms)
+    return Graph(reads, ploidy=2, error=error)

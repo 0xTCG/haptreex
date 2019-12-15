@@ -1,24 +1,25 @@
 from graph import Graph
 from rna import RNAData
+from typing import Tuple, Dict, List, Set
 
 
-def comp_MEC(m: int, X: dict[int, tuple[dict[int, int], dict[int, int]]], G: Graph) -> int:
+def comp_MEC(m: int, X: Dict[int, Tuple[Dict[int, int], Dict[int, int]]], G: Graph) -> int:
     # computes MEC score of component containing node m
     # polyploid-ready
     total = 0
     assert G.data.k == 2
     for read in G.comp_reads[m]:
         counts = [0] * G.data.k
-        for key in read.keys:
+        for key in read.snps:
             for i in range(G.data.k):
-                if not X[m][i][key] == read.read[key]: 
+                if not X[m][i][key] == read.snps[key]:
                     counts[i] += 1
         total += min(counts)
     return total
 
 
 def make_solution(
-    X: dict[int, tuple[dict[int, int], dict[int, int]]],
+    X: Dict[int, Tuple[Dict[int, int], Dict[int, int]]],
     G: Graph,
     outputname: str
 ):
@@ -43,7 +44,7 @@ def make_solution(
 
 
 def make_solution_RNA(
-    X: dict[int, tuple[dict[int, int], dict[int, int]]],
+    X: Dict[int, Tuple[Dict[int, int], Dict[int, int]]],
     RD: RNAData,
     outputname: str
 ):
@@ -67,10 +68,10 @@ def make_solution_RNA(
 
 
 def make_solution_simple(
-    X: dict[int, tuple[dict[int, int], dict[int, int]]],
+    X: Dict[int, Tuple[Dict[int, int], Dict[int, int]]],
     outputname: str,
-    vChroms: list[str],
-    vPositions: list[str]
+    vChroms: List[str],
+    vPositions: List[str]
 ):
     # writes phasing solution to outputname
     with open(outputname, "w") as f:

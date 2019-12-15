@@ -1,54 +1,46 @@
 from random import choice
+from typing import Tuple, Dict, List, Set, NamedTuple
+from dataclasses import dataclass
 
 
+class SNP(NamedTuple):
+    chr: str
+    pos: int
+    name: str
+    alleles: List[str]
+
+    def __lt__(self, other):
+        return (self.chr, self.pos) < (other.chr, other.pos)
+
+
+@dataclass
 class Read:
-    read: dict[int, int]
-    count: int
-    keys: list[int]
-    size: int
-    read_num: int
-    mini_reads: dict[int, dict[int, int]]
-    special_key: int
-    rates: tuple[float, float]
+    id: int # Unique read ID
+    count: int # Support
+    snps: Dict[SNP, int] # SNP -> Allele
+    # The following are used in alg.py:read_val_tail
+    special_snp: SNP
+    rates: List[float]
 
-    ## for normal reads, the read_dict doesnt include starts of reads
-    def __init__(self: Read, read: dict[int, int], count: int, read_num: int):
-        self.read = read
+    def __init__(self, snps: Dict[SNP, int], count: int, id: int):
+        self.id = id
         self.count = count
-        self.keys = sorted(self.read.keys())
-        # self.genomic_region = None
-        self.size = len(self.keys)
-        self.read_num = read_num
-        self.mini_reads = self.make_mini_reads()
-        self.special_key = self.keys[0]
-        self.rates = (0.5, 0.5)
+        self.snps = snps
+        self.special_snp = min(self.snps)
+        self.rates = [0.5, 0.5]
 
-    def __eq__(self: Read, other: Read):
-        return self.read == other.read and self.read_num == other.read_num
+    def __eq__(self, other):
+        return self.snps == other.snps and self.id == other.id
 
-    def __len__(self: Read):
-        return len(self.read)
+    def __len__(self):
+        return len(self.snps)
 
-    def __str__(self: Read):
-        return f'Read.{self.read}'
-
-    def make_mini_reads(self: Read) -> dict[int, dict[int, int]]:
-        mini_read_dict = dict[int, dict[int, int]]()
-        mini_read = copy(self.read)
-        for key in reversed(sorted(self.keys)):
-            mini_read_dict[key] = mini_read
-            mini_read = copy(mini_read)
-            mini_read.pop(key)
-        return mini_read_dict
+    def __str__(self):
+        return f'Read.{self.snps}'
 
 
-def sample_from_reads(reads: list[Read]) -> list[Read]:
-    new_reads = list[Read]()
-    for read in reads:
-        if read.size > 0:
-            new_reads.append(read)
-        else:
-            choice = choice(read.keys)
-            new_read = Read({choice: read.read[choice]}, 1, read.read_num)
-            new_reads.append(new_read)
-    return new_reads
+def sample_from_reads(reads: List[Read]) -> List[Read]:
+    return [
+        r if len(r) else Read(dict(choice(r.snps.items())), 1, r.id)
+        for r in reads
+    ]

@@ -1,36 +1,40 @@
 from graph import Graph, mins_of_comps, build_all_comps
 from read import Read
 from rna import RNAData
+from typing import Tuple, Dict, List, Set
+from dataclasses import dataclass
 
 
+@dataclass
 class MiniNode:
     index: int
-    neighbors: list[int]
+    neighbors: List[int]
 
 
+@dataclass
 class JointGraph:
     RD: RNAData
     G: Graph
     k: int
-    short_comp_mins: list[int]
-    short_comps_dict: dict[int, int]
-    long_comp_mins: list[int]
-    nodes: dict[int, MiniNode]
-    nodekeys: list[int]
+    short_comp_mins: List[int]
+    short_comps_dict: Dict[int, int]
+    long_comp_mins: List[int]
+    nodes: Dict[int, MiniNode]
+    nodekeys: List[int]
 
-    components: dict[int, list[int]]
-    comp_mins: list[int]
-    comps_dict: dict[int, int]
-    read_dict: dict[int, list[Read]]
-    comp_reads: dict[int, list[Read]]
+    components: Dict[int, List[int]]
+    comp_mins: List[int]
+    comps_dict: Dict[int, int]
+    read_dict: Dict[int, List[Read]]
+    comp_reads: Dict[int, List[Read]]
 
-    forward_short: dict[int, list[int]]
-    forward_long: dict[int, list[int]]
-    back_short: dict[int, int]
-    back_long: dict[int, int]
+    forward_short: Dict[int, List[int]]
+    forward_long: Dict[int, List[int]]
+    back_short: Dict[int, int]
+    back_long: Dict[int, int]
 
 
-    def __init__(self: JointGraph, RD: RNAData, G: Graph):
+    def __init__(self, RD: RNAData, G: Graph):
         self.RD = RD
         self.G = G
         # self.read_list = RD.all_reads
@@ -48,14 +52,14 @@ class JointGraph:
         # self.long_comps_dict = G.comps_dict
 
         # Organize nodes
-        self.nodes = dict[int, MiniNode]()
+        self.nodes: Dict[int, MiniNode] = {}
         Ls = len(self.short_comp_mins)
         Ll = len(self.long_comp_mins)
-        
-        self.forward_short = dict[int, list[int]]()
-        self.forward_long = dict[int, list[int]]()
-        self.back_short = dict[int, int]()
-        self.back_long = dict[int, int]()
+
+        self.forward_short: Dict[int, List[int]] = {}
+        self.forward_long: Dict[int, List[int]] = {}
+        self.back_short: Dict[int, int] = {}
+        self.back_long: Dict[int, int] = {}
         for i in range(Ls):
             Ms = self.short_comp_mins[i]
             self.forward_short[i] = self.RD.components[Ms]
@@ -82,10 +86,10 @@ class JointGraph:
 
         # translate components
         weird_components, _ = build_all_comps(self)
-        self.components = dict[int, list[int]]()
-        self.comps_dict = dict[int, int]()
+        self.components: Dict[int, List[int]] = {}
+        self.comps_dict: Dict[int, int] = {}
         for c in weird_components:
-            temp_comp = set[int]()
+            temp_comp: Set[int] = {}
             for C in weird_components[c]:
                 if C < Ls:
                     for x in self.forward_short[C]:
@@ -101,20 +105,18 @@ class JointGraph:
         self.comp_mins = mins_of_comps(self.components)
         self.read_dict, self.comp_reads = self.make_read_dict()
 
-    def make_read_dict(
-        self: JointGraph
-    ) -> tuple[dict[int, list[Read]], dict[int, list[Read]]]:
+    def make_read_dict(self) -> Tuple[Dict[int, List[Read]], Dict[int, List[Read]]]:
         # This does not work correctly if G is not the 2-reads from RNA-seq data.
-        read_dict = dict[int, list[Read]]()
+        read_dict: Dict[int, List[Read]] = {}
         for s in self.RD.components:
-            read_dict[s] = list[Read]()
+            read_dict[s]: List[Read] = []
             for r in self.RD.read_dict[s]:  # 1-reads
                 read_dict[s].append(r)
-        comp_reads = {m: list[Read]() for m in self.comp_mins}
+        comp_reads = {m: [] for m in self.comp_mins} #S
         for r in self.G.data.read_list.values():
-            m = self.comps_dict[r.keys[0]]
+            m = self.comps_dict[r.snps[0]]
             comp_reads[m].append(r)
-            for k in r.keys:
+            for k in r.snps:
                 if k in read_dict:
                     read_dict[k].append(r)
                 else:

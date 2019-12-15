@@ -1,14 +1,15 @@
 from math import log
 from rna import RNAData
+from typing import Tuple, Dict, List, Set
 
 
-def sort_key(a: tuple[int, float]) -> float:
+def sort_key(a: Tuple[int, float]) -> float:
     return a[1]
 
 
 def clusters_size(
-    snps: list[int], counts: dict[int, list[int]], sum_factor: int
-) -> list[list[int]]:
+    snps: List[int], counts: Dict[int, List[int]], sum_factor: int
+) -> List[List[int]]:
     tmp_dict = {s: float(sum(counts[s])) for s in snps}
     order = sorted(tmp_dict.items(), key=sort_key)
     
@@ -24,8 +25,8 @@ def clusters_size(
 
 
 def clusters_rate(
-    snps: list[int], counts: dict[int, list[int]], rate_factor: float
-) -> list[list[int]]:
+    snps: List[int], counts: Dict[int, List[int]], rate_factor: float
+) -> List[List[int]]:
     tmp_dict = {s: max(counts[s]) / float(sum(counts[s])) - 0.5 for s in snps}
     order = sorted(tmp_dict.items(), key=sort_key)
 
@@ -40,15 +41,15 @@ def clusters_rate(
     return clusters
 
 
-def new_score(pair: list[int], rates: tuple[float, float], conf: float) -> float:
+def new_score(pair: List[int], rates: Tuple[float, float], conf: float) -> float:
     r = conf * max(min(rates), 0.05) + 0.5 * (1 - conf)
     k, n = min(pair), sum(pair)
     return max(-(n - 2 * k) * log(r / (1 - r)), log(2.0))
 
 
 def update_snps_to_use_size_cluster(
-    RD: RNAData, snps_to_use: dict[int, list[int]], size_factor: int
-) -> dict[int, list[int]]:
+    RD: RNAData, snps_to_use: Dict[int, List[int]], size_factor: int
+) -> Dict[int, List[int]]:
     return { 
         min(cluster): sorted(cluster)
         for start in snps_to_use
@@ -57,8 +58,8 @@ def update_snps_to_use_size_cluster(
 
 
 def update_snps_to_use_rate_cluster(
-    RD: RNAData, snps_to_use: dict[int, list[int]], rate_factor: float
-) -> dict[int, list[int]]:
+    RD: RNAData, snps_to_use: Dict[int, List[int]], rate_factor: float
+) -> Dict[int, List[int]]:
     return { 
         min(cluster): sorted(cluster)
         for start in snps_to_use
@@ -68,8 +69,8 @@ def update_snps_to_use_rate_cluster(
 
 
 def update_snps_to_use_rate(
-    RD: RNAData, snps_to_use: dict[int, list[int]], rate_cutoff: float
-) -> dict[int, list[int]]:
+    RD: RNAData, snps_to_use: Dict[int, List[int]], rate_cutoff: float
+) -> Dict[int, List[int]]:
     high_confidence_starts = [ 
         start
         for start in snps_to_use
@@ -79,9 +80,9 @@ def update_snps_to_use_rate(
 
 
 def update_snps_to_use_coverage(
-    RD: RNAData, snps_to_use: dict[int, list[int]], coverage_cutoff: int
-) -> dict[int, list[int]]:
-    new = dict[int, list[int]]()
+    RD: RNAData, snps_to_use: Dict[int, List[int]], coverage_cutoff: int
+) -> Dict[int, List[int]]:
+    new: Dict[int, List[int]] = {}
     for start in snps_to_use:
         covered_snps = sorted([
             snp for snp in snps_to_use[start] if sum(RD.counts[snp]) > coverage_cutoff
@@ -92,9 +93,9 @@ def update_snps_to_use_coverage(
 
 
 def update_snps_to_use_cutoff(
-    RD: RNAData, snps_to_use: dict[int, list[int]], cutoff: float
-) -> dict[int, list[int]]:
-    new = dict[int, list[int]]()
+    RD: RNAData, snps_to_use: Dict[int, List[int]], cutoff: float
+) -> Dict[int, List[int]]:
+    new: Dict[int, List[int]] = {}
     for start in snps_to_use:
         confident_snps = sorted([
             snp for snp in snps_to_use[start] if RD.LLsnp[snp] < cutoff
@@ -105,9 +106,9 @@ def update_snps_to_use_cutoff(
 
 
 def update_snps_to_use_rate_dependent_cutoff(
-    RD: RNAData, snps_to_use: dict[int, list[int]], cutoff: int, conf: float
-) -> dict[int, list[int]]:
-    new = dict[int, list[int]]()
+    RD: RNAData, snps_to_use: Dict[int, List[int]], cutoff: int, conf: float
+) -> Dict[int, List[int]]:
+    new: Dict[int, List[int]] = {}
     for start in snps_to_use:
         confident_snps = sorted([
             snp for snp in snps_to_use[start] if new_score(RD.counts[snp], RD.rates[snp], conf) > cutoff

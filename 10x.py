@@ -46,7 +46,7 @@ def get_gemcode_regions(ibam, dist):
 
     #Create defaultdict for storing gemcode tuples
     #Key is gemcodes, value is coords namedtuple
-    gemcodes = defaultdict(list)
+    gemcodes = defaultdict(List)
 
     #Set current_chr as reference contig of first read
     current_chr = None
@@ -79,12 +79,12 @@ def get_gemcode_regions(ibam, dist):
                                max([end for chr, pos, end in gemcodes[barcode]]),
                                barcode, len(gemcodes[barcode]))
 
-            gemcodes = defaultdict(list)
+            gemcodes = defaultdict(List)
 
             gemcodes[gem].append(coords(read.reference_name, read.reference_start, read.reference_end))  # added read.reference_end -- pedge
 
         #If barcode has been seen previously and new read is colinear but beyond
-        #dist, yield old barcode as interval before adding new read to list
+        #dist, yield old barcode as interval before adding new read to List
         elif gem in gemcodes and read.reference_start - gemcodes[gem][-1].pos > dist:
 
             yield molecule(gemcodes[gem][0].chr,
@@ -131,7 +131,7 @@ def get_molecules(bam,ref=None,dist=20000):
 class fragment:
 
     def __init__(self, seq, name, barcode, dtype = 0):
-        self.seq = seq                         # list of (snp index, genomic index, allele call, quality score) tuples
+        self.seq = seq                         # List of (snp index, genomic index, allele call, quality score) tuples
         self.name = name                       # fragment ID / name
         self.barcode = barcode
         self.dtype = dtype
@@ -166,11 +166,11 @@ class fragment:
         fragstr = prefix + fragstr
         return fragstr
 
-# read in a HapCUT2 format fragment file into a list of fragment objects
+# read in a HapCUT2 format fragment file into a List of fragment objects
 def read_fragment_matrix(frag_matrix, vcf_file, chrom_filter=None):
 
     snp_ix = 0
-    vcf_dict = dict()
+    vcf_dict = Dict()
     with open(vcf_file,'r') as infile:
         for line in infile:
             if line[:1] == '#':
@@ -211,7 +211,7 @@ def read_fragment_matrix(frag_matrix, vcf_file, chrom_filter=None):
                 barcode = None
 
             call_list  = el[5:(5+2*num_blks)]              # extract base call part of line
-            call_list  = zip(*[iter(call_list)]*2)             # list -> tuple list conversion: credit to http://stackoverflow.com/questions/23286254/convert-list-to-a-list-of-tuples-python
+            call_list  = zip(*[iter(call_list)]*2)             # List -> Tuple List conversion: credit to http://stackoverflow.com/questions/23286254/convert-List-to-a-List-of-tuples-python
             call_list  = [(int(a)-1, b) for a,b in call_list]  # convert index to 0-based integer
             call_list2 = []
 
@@ -240,7 +240,7 @@ def read_fragment_matrix(frag_matrix, vcf_file, chrom_filter=None):
 
     return flist
 
-# print out a list of fragment objects to a HapCUT2 format fragment file
+# print out a List of fragment objects to a HapCUT2 format fragment file
 def write_fragment_matrix(flist,outfile, single_SNP_frags=False):
     lines = []
 
@@ -286,7 +286,7 @@ def link_fragments(hairs_file, vcf_file, bam_file, outfile, dist, single_SNP_fra
         exit(1)
 
     chroms = []
-    chrom_set = set()
+    chrom_set = Set()
     with open(vcf_file,'r') as infile:
         for line in infile:
             if line[:1] == '#':
@@ -307,7 +307,7 @@ def link_fragments(hairs_file, vcf_file, bam_file, outfile, dist, single_SNP_fra
         print("Linking 10X fragments on chromosome: {}".format(curr_chrom))
         flist = read_fragment_matrix(hairs_file,vcf_file,chrom_filter=curr_chrom)
 
-        barcode_to_flist = defaultdict(list)
+        barcode_to_flist = defaultdict(List)
 
         for f in flist:
 
@@ -333,7 +333,7 @@ def link_fragments(hairs_file, vcf_file, bam_file, outfile, dist, single_SNP_fra
             barcode_flist = barcode_to_flist[barcode]
 
             seen_snps = defaultdict(int)
-            bad_snps = set()
+            bad_snps = Set()
             new_fseq = []
             for f in barcode_flist:
 

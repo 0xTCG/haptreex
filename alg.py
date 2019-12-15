@@ -1,88 +1,90 @@
 from math import log
 from read import Read
 from common import CONFIDENCE
-from time import timing
+from mytime import timing
 from random import randint
 import sys
+from copy import copy
+from typing import Tuple, Dict, List, Set
 
 
 def read_val_tail(
-    partial_phase: tuple[dict[int, int], dict[int, int]],
-    p: float,
+    phase: List[Dict[SNP, int]],
+    pair_threshold: float,
     error: float,
-    relevant_reads: list[Read],
-    m: int,
-    m_prev: int
+    relevant_reads: List[Read],
+    last_snp: SNP,
+    prev_snp: Optional[SNP]
 ) -> float:
     """
     we extend a phasing and then calculating how likely that extension is
-    this looks at the prob of a particular phasing generating the set of reads 
-    which cover "end" ( = "m") and for which "end" is not the smallest SNP in the read. 
+    this looks at the prob of a particular phasing generating the Set of reads
+    which cover "end" ( = "last_snp") and for which "end" is not the smallest SNP in the read.
     (relevant reads for the extension)
     this log prob gets added to the log prob of the non-extended phasing.
     """
 
+    assert len(phase) == 2 # Diploid for now
+
     a = (1 - error) / (1 - (2 * error / 3.0))
     b = (error / 3.0) / (1 - (2 * error / 3.0))
-    val, val2 = 0.0, 0.0 
-    for read_obj in relevant_reads:
-        mini_read = read_obj.mini_reads[m]
+    val, val2 = 0.0, 0.0
+    for read in relevant_reads:
         probs, probs2 = 0.0, 0.0
-        for i, pp in enumerate(partial_phase):
-            prob = (CONFIDENCE * read_obj.rates[i]) + (0.5 * (1 - CONFIDENCE))
-            for key in mini_read:
-                prob *= (a if mini_read[key] == pp[key] else b)
-            probs2 += prob / (a if mini_read[m] == pp[m] else b)
+        for i, pp in enumerate(phase):
+            prob = (CONFIDENCE * read.rates[i]) + (0.5 * (1 - CONFIDENCE))
+            for snp in read.snps:
+                if snp <= last_snp:
+                    prob *= (a if read.snps[snp] == pp[snp] else b)
+            probs2 += prob / (a if read.snps[last_snp] == pp[last_snp] else b)
             probs += prob
         if probs == 0:
             val = -float("inf")
         else:
-            val += log(probs) * read_obj.count
-            if not m == read_obj.special_key:
-                val2 += log(probs2) * read_obj.count
+            val += log(probs) * read.count
+            if not last_snp == read.special_snp:
+                val2 += log(probs2) * read.count
 
-    # p is some measure of likelihood of adjacent mutations occuring together
+    # pair_threshold is some measure of likelihood of adjacent mutations occuring together
     # since we've know extended the haplotype we need to update the prior
-    if len(partial_phase[0]) > 1:
-        assert m_prev != -1
-        val += log(p if partial_phase[0][m] == partial_phase[0][m_prev] else (1 - p))
-    
+    if len(phase[0]) > 1:
+        assert prev_snp
+        val += log(
+            pair_threshold
+            if phase[0][last_snp] == phase[0][prev_snp]
+            else (1 - pair_threshold)
+        )
+
     return val - val2
 
 
 def branch(
-    m: int,
-    m_prev: int,
-    lists: list[tuple[dict[int, int], dict[int, int]]],
-    table: list[float],
+    phase: Tuple[List[List[Dict[SNP, int]]], List[float]],
+    snp: SNP,
+    prev_snp: Optional[SNP],
+    relevant_reads: list[Read],
     threshold: float,
-    p: float,
+    pair_threshold: float,
     error: float,
-    reads: list[Read]
 ):
     """
     k=2 only
     branch all solutions to highly probable solutions on one additional SNP
     lists include all current solutions
-    dict has list index of solutions and their likelihoods
+    Dict has List index of solutions and their likelihoods
     """
 
-    # partial_phase[_][m] | partial_phase[_][k for R.mini_reads[m] for R in relevant_reads]
-    # relevante updates: 
-
-    new_lists = list[tuple[dict[int, int], dict[int, int]]]()
-    new_table = list[float]()
-    configs = [(0, 1), (1, 0)]
-    costs = [0.0, 0.0]
-    threshold = log(threshold / (1 - threshold))
+    lists, table = phase
+    new_lists, new_table = [], []
+    configs, costs = [(0, 1), (1, 0)], [0.0, 0.0]
     for pi, partial in enumerate(lists):
+        assert len(partial) == 2
         # extend solution
         for i in range(2):
             # adding possible orderings of alleles for new SNP for diploid
-            partial[0][m], partial[1][m] = configs[i]
-            costs[i] = read_val_tail(partial, p, error, reads, m, m_prev)
+            partial[0][snp], partial[1][snp] = configs[i]
+            costs[i] = read_val_tail(partial, pair_threshold, error, relevant_reads, snp, prev_snp)
         max_cost = max(costs[0], costs[1])
-        # new_costs = {key: costs[key] - max_cost for key in costs}
         used = False
         for i in range(2):
             if costs[i] - max_cost >= threshold:
@@ -92,81 +94,74 @@ def branch(
                     extended_phase = (copy(partial[0]), copy(partial[1]))
                 else:
                     used = True
-                extended_phase[0][m], extended_phase[1][m] = configs[i]
+                extended_phase[0][snp], extended_phase[1][snp] = configs[i]
                 new_table.append(table[pi] - costs[i])
                 new_lists.append(extended_phase)
     return new_lists, new_table
 
 
 def prune(
-    m: int,
-    lists: list[tuple[dict[int, int], dict[int, int]]],
-    table: list[float],
-    n: int
+    phase: Tuple[List[List[Dict[SNP, int]]], List[float]],
+    is_last: bool
 ):
+    lists, table = phase
     # prune solutions based on number of solutions and thresholds
-    L = len(lists)
-    go = False
     threshold = 1.0
-    if m == n:
-        threshold = 1.0
-        go = True
-    elif L > 1000:
-        threshold = 0.1
-    elif L > 500:
-        threshold = 0.05
-    elif L > 100:
-        threshold = 0.01
-    else:
-        threshold = 0.001
+    if is_last: threshold = 1.0
+    elif len(lists) > 1000: threshold = 0.1
+    elif len(lists) > 500: threshold = 0.05
+    elif len(lists) > 100: threshold = 0.01
+    else: threshold = 0.001
     threshold = abs(log(threshold)) + 0.0001
-    
+
     min_val = min(table)
-    nlists = list[tuple[dict[int, int], dict[int, int]]]()
-    ntable = list[float]()
+    nlists: List[List[Dict[SNP, int]]] = []
+    ntable: List[float] = []
     for i, l in enumerate(lists):
         if abs(table[i] - min_val) < threshold:
             nlists.append(l)
             ntable.append(table[i])
-    if go:
+    if is_last:
         ni = randint(0, len(nlists) - 1)
         nlists, ntable = [nlists[ni]], [ntable[ni]]
     return nlists, ntable
 
 
 def parallel(
-    start: tuple[int, int],
+    graph: Graph,
+    component: Tuple[int, SNP],
     threshold: float,
-    p: float,
+    pair_threshold: float,
     error: float,
-    read_dict: dict[int, list[Read]],
-    components: dict[int, list[int]],
-    output: list[tuple[int, tuple[dict[int, int], dict[int, int]]]]
+    # read_dict: Dict[int, List[Read]],
+    # components: Dict[int, List[int]],
+    output: List[Tuple[SNP, List[Dict[SNP, int]]]]
 ):
-    lists, table = [(dict[int, int](), dict[int, int]())], [0.0]
-    skipped = True  # set to True to allow allele permutations; changed from original False
-    m_prev = -1 # SEQ/TODO: check! originally None
-    for m in components[start[1]]:
+    idx, root = component
+    # Ploidy Phase: [ SNP -> Allele ]
+    phase: Tuple[List[List[Dict[SNP, int]]], List[float]] = [[{}, {}]], [0.0]
+    skipped = True  # Set to True to allow allele permutations; changed from original False
+    prev_snp: SNP = None # SEQ/TODO: check! originally None
+    for snp in graph.components[root]:
         if skipped:
-            lists, table = branch(m, m_prev, lists, table, threshold, p, error, read_dict[m])
-            lists, table = prune(m, lists, table, max(components[m]))
+            phase = branch(phase, snp, prev_snp, graph.reads[snp], threshold, pair_threshold, error)
+            phase = prune(phase, snp == graph.components[snp][-1])
         else:  # specify beginning to remove allele permutations
-            lists, table = [(dict[int, int](), dict[int, int]())], [0.0]
+            phase = [[{}, {}]], [0.0]
             skipped = True
-        m_prev = m
-    output[start[0]] = (start[1], lists[0])
-    
-def RNA_phase(
-    threshold: float,
-    p: float,
-    error: float,
-    read_dict: dict[int, list[Read]],
-    comp_mins: list[int],
-    components: dict[int, list[int]]
-):
-    output = [(0, (dict[int, int](), dict[int, int]())) for _ in comp_mins]
-    print f'using {len(comp_mins)} workers...'
-    enumerate(comp_mins) ||> parallel(threshold, p, error, read_dict, components, output)
+        prev_snp = snp
+    output[idx] = (root, phase[0][0])
 
-    # print f'timings: {TB/1e9} {TP/1e9} {TR/1e9}'
-    return dict(output)
+
+def RNA_phase(
+    graph: Graph,
+    threshold: float,
+    pair_threshold: float,
+    error: float
+):
+    threshold = log(threshold / (1 - threshold))
+    output = [None for _ in graph.component_roots] #S [(0, (Dict[int, int](), Dict[int, int]())) for _ in comp_mins]
+    print(f'Phasing {len(graph.component_roots)} components...')
+    for i in enumerate(graph.component_roots):
+        parallel(i, graph, threshold, pair_threshold, error)
+    return dict(output) # (component) -> phase

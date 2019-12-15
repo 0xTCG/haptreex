@@ -1,24 +1,25 @@
 from math import log, exp, pow
 from common import binom
 from read import Read, sample_from_reads
+from typing import Tuple, Dict, List, Set
 
 
 def get_counts(
-    snps: list[int], reads: list[Read], shuffle: bool = True
-) -> dict[int, list[int]]:
+    snps: List[int], reads: List[Read], shuffle: bool = True
+) -> Dict[int, List[int]]:
     if shuffle:
         reads = sample_from_reads(reads)
     counts = {i: [0, 0] for i in range(len(snps))}
-    back = dict[int, int]()
+    back: Dict[int, int] = {}
     for i in range(len(snps)):
         back[snps[i]] = i
     for R in reads:
-        for snp in R.keys:
-            counts[back[snp]][R.read[snp] % 2] += R.count # originally just R.read[snp]
+        for snp in R.snps:
+            counts[back[snp]][R.snps[snp] % 2] += R.count # originally just R.read[snp]
     return counts
 
 
-def approx_rate(counts: list[list[int]]) -> float:
+def approx_rate(counts: List[List[int]]) -> float:
     return float(sum(max(c) for c in counts)) / float(sum(sum(c) for c in counts))
 
 
@@ -30,9 +31,9 @@ def trans(s1: int, s2: int, rate: float) -> float:
 
 
 def forward(
-    FD: dict[tuple[int, int], float],
+    FD: Dict[Tuple[int, int], float],
     X: int,
-    vec: dict[int, list[int]],
+    vec: Dict[int, List[int]],
     i: int,
     rate: float,
     p: float
@@ -48,7 +49,7 @@ def forward(
             FD[1, 0] = 0.0
             return 0.0
         else:
-            val = binom(Y[0] + Y[1], Y[0]) * pow(p, Y[0]) * pow(q, Y[1]) * pow(10.0, 10.0) 
+            val = binom(Y[0] + Y[1], Y[0]) * pow(p, Y[0]) * pow(q, Y[1]) * pow(10.0, 10.0)
             FD[0, 0] = val
             return val
     else:
@@ -68,14 +69,14 @@ def forward(
         return val
 
 
-def NW(vec: dict[int, list[int]], rate: float) -> float:
+def NW(vec: Dict[int, List[int]], rate: float) -> float:
     left = 0.001
     right = 1 - left
     dx = 0.001
     d = 1.0
 
-    def f(x: float, vec: dict[int, list[int]], rate: float):
-        FD = dict[tuple[int, int], float]()
+    def f(x: float, vec: Dict[int, List[int]], rate: float):
+        FD: Dict[Tuple[int, int], float] = {}
         return log(
             forward(FD, 0, vec, len(vec) - 1, rate, x)
             + forward(FD, 1, vec, len(vec) - 1, rate, x)
@@ -105,7 +106,7 @@ def NW(vec: dict[int, list[int]], rate: float) -> float:
     return mid
 
 
-def find_rates(snps: list[int], reads: list[Read], rate: float) -> tuple[float, float]:
+def find_rates(snps: List[int], reads: List[Read], rate: float) -> List[float]:
     ##if sufficient coverage, approximation works well
     ##snps must be sorted
     lb_for_approx = 200
@@ -119,5 +120,5 @@ def find_rates(snps: list[int], reads: list[Read], rate: float) -> tuple[float, 
         r = approx_rate(list(counts.values()))
     else:
         r = NW(counts, rate)
-    
-    return r, 1 - r
+
+    return [r, 1 - r]

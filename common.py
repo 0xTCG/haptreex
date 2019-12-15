@@ -1,4 +1,5 @@
 from math import erf, sqrt, factorial
+from typing import Tuple, Dict, List, Set
 
 
 CUTOFF = 0
@@ -7,7 +8,7 @@ CONFIDENCE = 0.5
 PAIR_TRESH = 0.8
 
 DOT = -10 # "."
-V = dict[int, dict[int, int]]()
+V = [] #S List[Dict[int, int]]()
 
 
 def cdf(n: float, k: int, var: int) -> float:
@@ -26,7 +27,7 @@ def binom(n: float, k: float) -> float:
     return n * binom(n - 1, k - 1) / k
 
 
-def score(pair: list[int]) -> float:
+def score(pair: List[int]) -> float:
     """
     Computing probability that a fair coin generates something as or more
     extremely biased than we we are seeing.

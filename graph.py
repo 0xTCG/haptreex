@@ -1,198 +1,108 @@
 from itertools import combinations
 from read import Read
+from typing import Tuple, Dict, List, Set
+from dataclasses import dataclass
 
 
-def mins_of_comps(comps: dict[int, list[int]]) -> list[int]:
-    return sorted(list({min(comp) for comp in comps.values()}))
-
-
-def build_comp(g, start: int) -> list[int]:
+def build_components(snps: List[SNP], nodes: Dict[SNP, Node]) -> Dict[SNP, List[SNP]]:
     """
-    builds connected component containing the node start
-    returns ordered list of nodes in component
+    Build connected component dictionaries:
+        {SNP: [sorted list of reachable SNPs]}.
+    The component root is the first SNP.
     """
-    s, old_batch = {start}, {start}
-    while len(old_batch) > 0:
-        # new_batch = {y for x in old_batch for y in g.nodes[x]}
-        new_batch = set[int]()
-        for x in old_batch:
-            new_batch |= set(g.nodes[x].neighbors)
-        new_batch -= s
-        s.update(new_batch)
-        old_batch = new_batch
-    return sorted(list(s))
-
-
-def build_all_comps(g) -> tuple[dict[int, list[int]], dict[int, int]]:
-    """
-    builds connected component dictionaries
-    comps maps each node to a list of nodes it is connected to
-    comps_dict maps each node to the smallest node it is connected to
-    """
-    comps = dict[int, list[int]]()
-    comps_dict = dict[int, int]()
-    unbuilt = set(g.nodekeys)
+    comps: Dict[SNP, List[SNP]] = {}
+    unbuilt = set(snps)
     while len(unbuilt) > 0:
-        start = unbuilt.pop()
-        s = build_comp(g, start)
-        comps[start] = s
-        comps_dict[start] = min(s)
-        unbuilt -= set(s)  # we build_comp once for each set of components
-        for key in s:  # and apply it to each nodekey
-            comps[key] = s
-            comps_dict[key] = comps_dict[start]
-    return comps, comps_dict
+        start = unbuilt.pop() # Take random SNP
+        # Find all SNPs that are reachable from start
+        comp, old_batch = {start}, {start}
+        while len(old_batch) > 0:
+            new_batch: Set[int] = {}
+            for x in old_batch:
+                new_batch |= set(nodes[x].neighbors)
+            new_batch -= comp
+            comp |= new_batch
+            old_batch = new_batch
+        unbuilt -= comp
+        comp = sorted(comp)
+        for snp in comp: # Update the dictionaries
+            comps[snp] = comp
+    return comps
 
 
+@dataclass
 class Node:
-    k: int
-    index: int
-    shape: int
-    neighbors: list[int]
-    pos: int
-    name: str
-    chrom: str
-    num: int
+    ploidy: int
+    snp: SNP
+    neighbors: List[SNP]
 
-    def __eq__(self: Node, other: Node):
-        return self.index == other.index
+    def __eq__(self, other):
+        return self.snp == other.snp
 
-    def __lt__(self: Node, other: Node):
-        return self.index < other.index
+    def __lt__(self, other):
+        return self.snp < other.snp
 
 
+@dataclass
 class Edge:
-    nodes: tuple[Node, Node]
-    k: int
-    indices: tuple[int, int]
-    
-    def __init__(self: Edge, node_pair: tuple[Node, Node], k: int):
-        self.nodes = node_pair
-        self.k = k
-        self.indices = (node_pair[0].index, node_pair[1].index)
+    nodes: Tuple[Node, Node]
+    ploidy: int
 
-    def __eq__(self: Edge, other: Edge):
-        return self.indices == other.indices
+    def __eq__(self, other):
+        return self.nodes == other.nodes
 
 
-class Data:
-    """
-    A 'Data' object stores all initial info needed to create ReadGraph G
-     - data contains read info
-     - states is the state of each Node, in diploid this is always 1, counts the number of mutant alleles
-     - k = ploidy
-     - error = error rate assumed
-     - read_list is list of reads
-     - positions is the actual position on the genome (1-3bb) in base pair count
-    """
-    # data: dict[tuple[int, int], int]
-    states: dict[int, int]
-    k: int
+@dataclass
+class Graph:
+    reads: list[Read] # List of read objects
+    ploidy: int
     error: float
-    read_list: dict[int, Read]
-    positions: dict[int, int]
-    names: dict[int, str]
-    chroms: dict[int, str]
 
-    nodekeys: list[int]
-    nodes: dict[int, Node]
-    edges: dict[tuple[int, int], Edge]
+    snps: List[SNP] # Sorted list of SNPs
+    nodes: Dict[SNP, Node] # Mapping from a SNP to a node
+    edges: Dict[Tuple[SNP, SNP], Edge] # TODO: even needed?
+
+    component_roots: List[SNP]
+    components: Dict[SNP, List[SNP]] # {SNP: [sorted list of reachable SNPs]}
+    component_reads: Dict[SNP, List[Read]]
+    snp_reads: Dict[SNP, List[Read]]
 
     def __init__(
-        self: Data,
-        data: dict[tuple[int, int], int],
-        states: dict[int, int],
-        k: int,
-        error: float,
-        read_list: dict[int, Read],
-        positions: dict[int, int],
-        names: dict[int, str],
-        chroms: dict[int, str]
+        self,
+        reads: List[Read],
+        ploidy: int,
+        error: float
     ):
-        # self.data = data
-        self.states = states
-        self.k = k
+        self.reads = reads
+        self.ploidy = ploidy
         self.error = error
-        self.read_list = read_list
-        self.positions = positions
-        self.names = names
-        self.chroms = chroms
 
-        # computes all nodes actually seen by reads
-        self.nodekeys = sorted(list({i for e in data for i in e}))
-        # returns dictionary mapping NODE to those nodes adjacent to NODE
-        adj = {i: list[int]() for i in self.nodekeys}
+        data = { # All connected SNPs (edges)
+            (i, j) if i < j else (j, i)
+            for r in reads
+            for i, j in combinations(r.snps, 2)
+        }
+        self.snps = sorted(list({i for e in data for i in e}))
+        print(f"{len(self.snps)} SNPs in non-trivial connected components")
+        # returns dictionary mapping NODE to those snps adjacent to NODE
+        adj = {i: [] for i in self.snps} #S SNP -> adj. SNPs
         for e in data:
             adj[e[0]].append(e[1])
             adj[e[1]].append(e[0])
+        self.nodes = {snp: Node(ploidy, snp, adj[snp]) for snp in self.snps}
+        self.edges = {(i, j): Edge(self.ploidy, (self.nodes[i], self.nodes[j])) for i, j in data}
 
-        self.nodes = dict[int, Node]()
-        for num in range(len(self.nodekeys)):
-            index = self.nodekeys[num]
-            self.nodes[index] = Node(
-                self.k,
-                index,
-                self.states[index],
-                adj[index],
-                self.positions[index],
-                self.names[index],
-                self.chroms[index],
-                num
-            )
-        self.edges = {
-            e: Edge((self.nodes[e[0]], self.nodes[e[1]]), self.k) 
-            for e in data
-        }
-
-
-class Graph:
-    data: Data
-    size: int
-
-    nodekeys: list[int]
-    nodes: dict[int, Node]
-    components: dict[int, list[int]]
-    comps_dict: dict[int, int]
-    comp_mins: list[int]
-
-    read_dict: dict[int, list[Read]]
-    comp_reads: dict[int, list[Read]]
-
-    def __init__(self: Graph, data: Data):
         """ReadGraph object, takes in data object"""
 
-        self.data = data
-        self.size = len(self.data.nodekeys)
-        print f"{self.size} SNPs in non-trivial connected components"
+        self.components = build_components(self.snps, self.nodes)
+        self.component_roots = [c[0] for c in self.components.values()]
 
-        self.nodekeys = self.data.nodekeys
-        self.nodes = self.data.nodes
-        self.components, self.comps_dict = build_all_comps(self)
-        self.comp_mins = mins_of_comps(self.components)
-        self.read_dict, self.comp_reads = self.make_read_dict()
+        self.component_reads = {m: [] for m in self.comp_mins} #S Component root -> List of reads
+        self.snp_reads = {s: [] for s in self.data.nodekeys} #S SNP -> List of reads
+        for r in self.reads:
+            self.component_reads.setdefault(self.components[r.snps[0]][0], []).append(r)
+            for snp in r.snps[1:]:
+                self.snp_reads.setdefault(snp, []).append(r)
 
-    def __iter__(self: Graph):
-        return self.data.nodes.values()
-
-    def make_read_dict(self) -> tuple[dict[int, list[Read]], dict[int, list[Read]]]:
-        comp_reads = {m: list[Read]() for m in self.comp_mins}
-        read_dicts = {s: list[Read]() for s in self.data.nodekeys}
-        for r in self.data.read_list.values():
-            m = self.comps_dict[r.keys[0]]
-            comp_reads[m].append(r)
-            for key in r.keys[1:]:
-                read_dicts[key].append(r)
-        return read_dicts, comp_reads
-
-
-def edges_from_readlist(read_list: dict[int, Read]):
-    """
-    returns dictionary with keys those edges that appear in G and values all 1
-    """
-    d = dict[tuple[int, int], int]()
-    for zz in read_list:
-        seen_nodes = read_list[zz].keys
-        for pair in combinations(seen_nodes, 2):
-            i, j = pair
-            d[(i, j) if i < j else (j, i)] = 1
-    return d
+    def __iter__(self):
+        return self.nodes.values()

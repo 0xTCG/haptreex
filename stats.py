@@ -2,21 +2,22 @@ from alg import RNA_phase
 from stats_helper import *
 from rna import RNAData
 import common
+from typing import Tuple, Dict, List, Set
 
 
-def num_SNP(STU: dict[int, list[int]]) -> int:
-    return sum(len(s) for s in list(STU.values()))
+def num_SNP(STU: Dict[int, List[int]]) -> int:
+    return sum(len(s) for s in STU.values())
 
 
 def switches_comp_strand2(
     start: int,
     strand: int,
-    sol: dict[int, tuple[dict[int, int], dict[int, int]]],
-    gold: dict[int, dict[int, int]],
+    sol: Dict[int, Tuple[Dict[int, int], Dict[int, int]]],
+    gold: Dict[int, Dict[int, int]],
     G: RNAData
-) -> tuple[int, list[int]]:
+) -> Tuple[int, List[int]]:
     m = 0
-    switches = list[int]()
+    switches: List[int] = []
     for i in G.components[start]:
         p = [sol[start][0][i], sol[start][1][i]]
         if p[strand] != gold[0][i] and gold[0][i] != common.DOT:
@@ -28,10 +29,10 @@ def switches_comp_strand2(
 
 def switches_in_comp2(
     start: int,
-    sol: dict[int, tuple[dict[int, int], dict[int, int]]],
-    gold: dict[int, dict[int, int]],
+    sol: Dict[int, Tuple[Dict[int, int], Dict[int, int]]],
+    gold: Dict[int, Dict[int, int]],
     G: RNAData
-) -> tuple[int, list[int]]:
+) -> Tuple[int, List[int]]:
     m0, switches0 = switches_comp_strand2(start, 0, sol, gold, G)
     m1, switches1 = switches_comp_strand2(start, 1, sol, gold, G)
     if m0 < m1:
@@ -41,9 +42,9 @@ def switches_in_comp2(
 
 
 def con_dis_non(
-    X: dict[int, tuple[dict[int, int], dict[int, int]]], V: dict[int, dict[int, int]]
-) -> tuple[dict[int, dict[str, int]], list[int]]:
-    counts = dict[int, dict[str, int]]()  # {x:{} for x in X}
+    X: Dict[int, Tuple[Dict[int, int], Dict[int, int]]], V: Dict[int, Dict[int, int]]
+) -> Tuple[Dict[int, Dict[str, int]], List[int]]:
+    counts: Dict[int, Dict[str, int]] = {}  # {x:{} for x in X}
     for x in X:
         countsx = {0: 0, -1: 0, 1: 0}
         for y in X[x][0]:
@@ -76,23 +77,23 @@ def stats(
     conf: float,
     show: bool = False
 ):
-    ### all of these current_STU* filter the set of SNPs we are going to try to phase
+    ### all of these current_STU* filter the Set of SNPs we are going to try to phase
     current_STU0 = RD.snps_to_use
-    print f"Original RD SNP dictionary size: {len(current_STU0)} {num_SNP(current_STU0)}"
+    print(f"Original RD SNP dictionary size: {len(current_STU0)} {num_SNP(current_STU0)}")
     #for s in sorted(current_STU0):
-    #    print f"{s} {max(RD.rates[s].values())} {rate_cutoff}"
+    #    print(f"{s} {max(RD.rates[s].values())} {rate_cutoff}")
     current_STU1 = update_snps_to_use_rate(RD, current_STU0, rate_cutoff)
-    print f"STU1(rate_cutoff) RD SNP size: {len(current_STU1)} {num_SNP(current_STU1)}"
+    print(f"STU1(rate_cutoff) RD SNP size: {len(current_STU1)} {num_SNP(current_STU1)}")
     current_STU2 = update_snps_to_use_coverage(RD, current_STU1, coverage_cutoff)
-    print f"STU2(coverage_cutoff) RD SNP size: {len(current_STU2)} {num_SNP(current_STU2)}"
+    print(f"STU2(coverage_cutoff) RD SNP size: {len(current_STU2)} {num_SNP(current_STU2)}")
     current_STU3 = update_snps_to_use_size_cluster(RD, current_STU2, size_factor)
-    print f"STU3(size_factor) RD SNP size: {len(current_STU3)} {num_SNP(current_STU3)}"
+    print(f"STU3(size_factor) RD SNP size: {len(current_STU3)} {num_SNP(current_STU3)}")
     current_STU4 = update_snps_to_use_rate_dependent_cutoff(RD, current_STU3, rate_dep_cutoff, conf)
-    print f"STU4(rate_dep_cutoff,conf) RD SNP size: {len(current_STU4)} {num_SNP(current_STU4)}"
+    print(f"STU4(rate_dep_cutoff,conf) RD SNP size: {len(current_STU4)} {num_SNP(current_STU4)}")
     current_STU5 = update_snps_to_use_cutoff(RD, current_STU4, cutoff)
-    print f"STU5(cutoff) RD SNP size: {len(current_STU5)} {num_SNP(current_STU5)}"
+    print(f"STU5(cutoff) RD SNP size: {len(current_STU5)} {num_SNP(current_STU5)}")
     current_STU6 = update_snps_to_use_rate_cluster(RD, current_STU5, rate_factor)
-    print f"STU6(rate_factor) RD SNP size: {len(current_STU6)} {num_SNP(current_STU6)}"
+    print(f"STU6(rate_factor) RD SNP size: {len(current_STU6)} {num_SNP(current_STU6)}")
     
     RD.make_components(current_STU6)
     X = RNA_phase(
