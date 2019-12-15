@@ -95,7 +95,7 @@ class Graph:
         """ReadGraph object, takes in data object"""
 
         self.components = build_components(self.snps, self.nodes)
-        self.component_roots = [c[0] for c in self.components.values()]
+        self.component_roots = sorted([c[0] for c in self.components.values()])
 
         self.component_reads = {m: [] for m in self.comp_mins} #S Component root -> List of reads
         self.snp_reads = {s: [] for s in self.data.nodekeys} #S SNP -> List of reads

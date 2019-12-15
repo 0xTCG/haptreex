@@ -15,12 +15,12 @@ from pprint import pprint
 def parse_vcf(
     vcf_path: str,
     sample: Optional[str] = None
-) -> Tuple[Dict[str, List[SNP]], List[Tuple[str, int]]]:
+) -> Tuple[Dict[str, List[SNP]], Dict[int, Tuple[str, int]]]:
     """
     Parse a VCF file and return a dictionary of sorted SNPs:
         d := {chromosome_name: sorted([snp_1, snp_2])}
     and the corresponding line index
-        [line_in_vcf: (chr, index in d[chr]), ...].
+        {line_in_vcf: (chr, index in d[chr])}.
     Each snp_i is a SNP that is heterozygous in the sample (i.e. |set(GT(snp_i))| > 1).
     """
 
@@ -34,21 +34,21 @@ def parse_vcf(
             raise ValueError(f'Sample {sample} not found in the VCF')
         sample = sample if sample else samples[0]
         print(f'Using sample {sample} in {vcf_path}...')
-        for rec in vcf:
+        for rec_i, rec in enumerate(vcf):
             if len(rec.ref) != 1: continue # Ignore indels
             # We only deal with SNPs here for now
             gt = rec.samples[sample]['GT']
             # Get only alleles that are specified in GT field
             alleles = [a for i, a in enumerate(rec.alleles) if i in gt and len(a) == 1]
             if len(alleles) > 1: # Ignore homozygous SNPs
-                snp = SNP(rec.chrom, rec.pos - 1, rec.id, alleles)
+                snp = SNP(rec_i, rec.chrom, rec.pos - 1, rec.id, alleles)
                 if rec.chrom not in snps:
                     snps[rec.chrom] = [snp]
                 elif snp < snps[rec.chrom][-1]:
                     raise ValueError(f'VCF is not sorted (SNP {snp})')
                 else:
                     snps[rec.chrom].append(snp)
-                index.append((rec.chrom, len(snps[rec.chrom])))
+                index[rec_i] = rec.chrom, len(snps[rec.chrom])
     return snps, index
 
 
@@ -145,7 +145,7 @@ def parse_bam(
             elif (
                 not line.mate_is_unmapped
                 and line.reference_name == line.next_reference_name
-                line.mpos < line.pos
+                and line.mpos < line.pos
             ):
                 yield from parse_read([line], snps, threshold, ignore_conflicts)
             elif (
@@ -162,7 +162,7 @@ def parse_bam(
 
 def parse_fragmat(
     fragmat: str,
-    snp_index: List[Tuple[str, int]],
+    snp_index: Dict[int, Tuple[str, int]],
     snps: Dict[str, List[SNP]],
     skip_single: bool
 ) -> Iterator[Tuple[str, List[Tuple[SNP, int, str]]]]:
@@ -180,7 +180,7 @@ def parse_fragmat(
 
             alleles = []
             for i in range(0, len(frag), 2):
-                if not 0 <= frag[i] < len(snp_index):
+                if int(frag[i]) not in snp_index:
                     raise ValueError(f'Invalid SNP index {frag[i]} for read {name}')
                 chr, idx = snp_index[int(frag[i])]
                 for j, allele in enumerate(frag[i + 1]):
@@ -192,7 +192,7 @@ def parse_fragmat(
 
 
 def parse_phases(
-    vcf: Tuple[Dict[str, List[SNP]], List[Tuple[str, int]]],
+    vcf: Tuple[Dict[str, List[SNP]], Dict[int, Tuple[str, int]]],
     paths: List[str],
     skip_single: bool = True
 ) -> Iterator[Read]:
@@ -200,7 +200,7 @@ def parse_phases(
     reads = []
     for path in paths:
         print(f'Parsing {path}...')
-        for _, alleles in parse_bam(path, snps):
+        for _, alleles in parse_fragmat(path, snp_index, snps, skip_single):
             if not (skip_single and len(alleles) <= 1):
                 reads.append(alleles)
     print(f"{len(reads)} reads of sufficient quality")

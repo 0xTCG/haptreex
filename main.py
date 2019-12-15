@@ -68,19 +68,15 @@ def parse_args() -> Tuple[str, str, str, str, str, str]:
         print(f'{err}')
         sys.exit(2)
 
-
 vcf, DNAfragmat, RNAfragmat, gene_data, outputname, isoforms = parse_args()
-pair_thresh = 0.7
 
+PHASE_THRESHOLD = 0.001
+PAIR_THRESHOLD = 0.7
+PHASE_ERROR = 0.02
 
-g = datagen.load_dna_data(vcf, [DNAfragmat], error=0.02)
-GX = alg.RNA_phase(g,
-    threshold=0.001,
-    pair_thresh,
-    error=0.02)
-    #G.read_dict, G.comp_mins, G.components)
-
-output.make_solution(GX, G, outputname)
+graph = datagen.load_dna_data(vcf, [DNAfragmat], error=0.02)
+phases = alg.phase(graph, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
+output.make_solution(graph, phases, outputname)
 
 
 # with timing('Main'):

@@ -3,43 +3,43 @@ from rna import RNAData
 from typing import Tuple, Dict, List, Set
 
 
-def comp_MEC(m: int, X: Dict[int, Tuple[Dict[int, int], Dict[int, int]]], G: Graph) -> int:
-    # computes MEC score of component containing node m
-    # polyploid-ready
+def mec_score(ploidy: int, reads: List[Read], phase: Phase) -> int:
+    """
+    Computes a phase MEC score of a connected component.
+    """
     total = 0
-    assert G.data.k == 2
-    for read in G.comp_reads[m]:
-        counts = [0] * G.data.k
-        for key in read.snps:
-            for i in range(G.data.k):
-                if not X[m][i][key] == read.snps[key]:
-                    counts[i] += 1
+    for read in reads:
+        counts = [0] * ploidy
+        for snp in read.snps:
+            for hap in range(ploidy):
+                if not phase.haplotypes[hap][snp] == read.snps[snp]:
+                    counts[hap] += 1
         total += min(counts)
     return total
 
 
-def make_solution(
-    X: Dict[int, Tuple[Dict[int, int], Dict[int, int]]],
-    G: Graph,
-    outputname: str
-):
-    # writes phasing solution to outputname
+def make_solution(G: Graph, phases: Dict[SNP, Phase], path: str):
     # polyploid-ready
-    with open(outputname, "w") as f:
-        for start in sorted(G.comp_mins):
-            s_pos = G.data.nodes[start].pos
-            e_pos = G.data.nodes[G.components[start][-1]].pos
-            reads = sum(x.count for x in G.comp_reads[start])
+    with open(path, "w") as f:
+        for root in G.component_roots:
+            s_pos = G.data.nodes[root].snp.pos
+            e_pos = G.data.nodes[G.components[root][-1]].snp.pos
+            mec = mec_score(G.ploidy, G.component_reads[root], phases[root])
+            reads = sum(len(x) for x in G.component_reads[root])
             f.write(
-                f"BLOCK Start: {start + 1} Len: {len(G.components[start])} "
-                + f"Phased: {len(G.components[start])} Span: {e_pos - s_pos} "
-                + f"MEC: {comp_MEC(start, X, G)} Reads: {reads}\n"
+                f"BLOCK "
+                f"Start: {root} "
+                f"Len: {len(G.components[root])} "
+                f"Phased: {len(G.components[root])} "
+                f"Span: {e_pos - s_pos} "
+                f"MEC: {mec} "
+                f"Reads: {reads}\n"
             )
-            for i in G.components[start]:
-                f.write(f"{i+1}\t")
-                for p in range(G.data.k):
-                    f.write(f"{X[start][p][i]}\t")
-                f.write(f"{G.data.nodes[i].chrom}\t{G.data.nodes[i].pos}\t\n")
+            for snp in G.components[root]:
+                f.write(f"{snp}\t")
+                for hap in range(G.ploidy):
+                    f.write(f"{phases[root].haplotypes[hap][snp]}\t")
+                f.write(f"{snp.chr}\t{snp.pos}\t\n")
             f.write("*****\n")
 
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 
 class SNP(NamedTuple):
+    id: int
     chr: str
     pos: int
     name: str
@@ -12,6 +13,8 @@ class SNP(NamedTuple):
     def __lt__(self, other):
         return (self.chr, self.pos) < (other.chr, other.pos)
 
+    def __repr__(self):
+        return f"{self.id}"
 
 @dataclass
 class Read:
