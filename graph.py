@@ -98,8 +98,7 @@ class Graph:
                     adj[i].add(j)
         self.nodes = {snp: Node(ploidy, snp, adj[snp]) for snp in self.snps}
 
-        """ReadGraph object, takes in data object"""
-
+        # Build connected components
         self.components, self.component_index = build_components(self.snps, self.nodes)
 
         self.snp_reads = {s: [] for s in self.snps}  #S SNP -> List of reads

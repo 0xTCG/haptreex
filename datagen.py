@@ -3,6 +3,8 @@ from graph import Graph
 from common import QUALITY_CUTOFF
 from typing import Tuple, Dict, List, Set, NamedTuple, Optional, Iterator, Any
 from dataclasses import dataclass
+from RNA import RNAData
+from gene import Gene
 import pysam
 import bisect
 from pprint import pprint
@@ -12,6 +14,7 @@ from pprint import pprint
 class VCF:
     snps: List[SNP]
     line_to_snp: Dict[int, int] # 1-based index
+    chromosomes: Set[str]
 
 
 def parse_vcf(
@@ -28,6 +31,7 @@ def parse_vcf(
 
     snps: List[SNP] = []
     line_to_snp: Dict[int, int] = {}
+    chromosomes: Set[str] = set()
     with open(vcf_path) as vcf:
         # samples = list(vcf.header.samples)
         # if not samples:
@@ -56,7 +60,40 @@ def parse_vcf(
                     raise ValueError(f'VCF is not sorted (SNP {snp})')
                 line_to_snp[seen_snps] = len(snp)
                 snps.append(snp)
-    return VCF(snps, line_to_snp)
+                chromosomes.add(chr)
+
+    return VCF(snps, line_to_snp, chromosomes)
+
+
+def parse_gtf(gtf_path: str, chroms: Set[str]) -> Iterator[Gene]:
+    b = [a[:-2].split("\t") for a in open(gtf_path, "r") if a[0] != '#']
+
+    genes: List[int] = []
+    exons: List[List[Tuple[int, int]]] = []  # Gene -> List of exon (start, len)
+    for gene, line in enumerate(b):
+        if line[2] == "transcript":
+            genes.append(gene)
+            exons.append([])
+    for gene in range(len(genes)):
+        end = genes[gene + 1] if gene < len(genes) - 1 else len(b)
+        for l in range(genes[gene], end):
+            if b[l][2] == "exon":
+                exon_start = int(b[l][3])
+                exon_end = int(b[l][4])
+                exons[gene].append((exon_start, exon_end - exon_start + 1))
+    for gene in genes:
+        chrom = b[gene][0]
+        if chrom not in chroms:
+            continue
+        v = [xx.split(" ") for xx in b[gene][8].split("; ")]
+        yield Gene(
+            id=gene,
+            name=v[1][1][1:-1],
+            chr=chrom,
+            interval=(int(b[gene][3]), int(b[gene][4])),
+            sign=b[gene][6],
+            exons=exons[gene],
+        )
 
 
 def parse_read(
@@ -235,29 +272,31 @@ def parse_phases(
 # make RNA_data and DNA_data objects
 
 
-# def make_RNA_data_from_fragmat(
-#     gene_data: str,
-#     fragmats: List[str],
-#     vcf: str,
-#     error: float,
-#     isoforms: str
-# ) -> RNAData:
-#     read_list = make_readlist_from_fragmat(fragmats, skip_single=False) # 4s
-#     print(f"Loading VCF file {vcf}")
-#     S, names, chroms, positions, k = positions_names_states(vcf) # 3s
-#     print("Preparing data for ReadGraph")
-#     genes = determine_genes_gtf(gene_data, set(chroms.values())) # 42s
+def load_rna_data(
+    vcf_path: str,
+    gtf_path: str,
+    paths: List[str],
+    error: float,
+    isoforms_path: str
+) -> RNAData:
+    print(f"Loading VCF file {vcf_path}...")
+    vcf = parse_vcf(vcf_path)
+    print(f"{len(vcf.snps)} SNPs in VCF file")
 
-#     isodict: Dict[str, Tuple[float, str]] = {}
-#     filtered_genes = genes
-#     if isoforms != "":
-#         print("Building IsoDict")
-#         isodict = build_isodict(isoforms)
-#         filtered_genes = filter_transcripts(genes, isodict)
+    print(f"Loading GTF {gtf_path}...")
+    genes = list(parse_gtf(gtf_path, vcf.chromosomes))
+    print(f"{len(genes)} genes in GTF file")
 
-#     return RNAData(
-#         S, genes, filtered_genes, error, read_list, positions, names, chroms, isodict
-#     )
+    # graph = Graph(reads, ploidy=2, error=error)
+    # return vcf, graph
+    isodict: Dict[str, Tuple[float, str]] = {}
+    filtered_genes = genes
+    if isoforms != "":
+        print("Building IsoDict")
+        isodict = build_isodict(isoforms)
+        filtered_genes = filter_transcripts(genes, isodict)
+
+    return RNAData(vcf, filtered_genes, reads, error)
 
 
 def load_dna_data(

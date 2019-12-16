@@ -12,7 +12,7 @@ def clusters_size(
 ) -> List[List[int]]:
     tmp_dict = {s: float(sum(counts[s])) for s in snps}
     order = sorted(tmp_dict.items(), key=sort_key)
-    
+
     clusters = [[order[0][0]]]
     for j in range(len(order) - 1):
         s0 = order[j][0]
@@ -50,7 +50,7 @@ def new_score(pair: List[int], rates: Tuple[float, float], conf: float) -> float
 def update_snps_to_use_size_cluster(
     RD: RNAData, snps_to_use: Dict[int, List[int]], size_factor: int
 ) -> Dict[int, List[int]]:
-    return { 
+    return {
         min(cluster): sorted(cluster)
         for start in snps_to_use
         for cluster in clusters_size(snps_to_use[start], RD.counts, size_factor)
@@ -60,7 +60,7 @@ def update_snps_to_use_size_cluster(
 def update_snps_to_use_rate_cluster(
     RD: RNAData, snps_to_use: Dict[int, List[int]], rate_factor: float
 ) -> Dict[int, List[int]]:
-    return { 
+    return {
         min(cluster): sorted(cluster)
         for start in snps_to_use
         for cluster in clusters_rate(snps_to_use[start], RD.counts, rate_factor)
@@ -71,7 +71,7 @@ def update_snps_to_use_rate_cluster(
 def update_snps_to_use_rate(
     RD: RNAData, snps_to_use: Dict[int, List[int]], rate_cutoff: float
 ) -> Dict[int, List[int]]:
-    high_confidence_starts = [ 
+    high_confidence_starts = [
         start
         for start in snps_to_use
         if max(RD.rates[start]) >= rate_cutoff

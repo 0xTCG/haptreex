@@ -1,34 +1,78 @@
 from bisect import bisect_left
-from graph import Node, Data, edges_from_readlist
-from gene import Gene, make_genomic_graph, assign_reads_to_genomic_regions
-from read import Read
+from graph import Node, build_components
+from datagen import VCF
+# from gene import make_genomic_graph, assign_reads_to_genomic_regions
+from read import SNP, Read
 from common import score
 from rates import find_rates
 from typing import Tuple, Dict, List, Set
 from dataclasses import dataclass
 
 
+@dataclass(init=False)
+class Gene:
+    id: int  # index
+    name: str  # a.k.a. transcript
+    chr: str
+    interval: Tuple[int, int]
+    sign: str
+
+    exons: List[Tuple[int, int]]  # List of (start, len)
+    neighbors: Set[int]
+    snps: Set[int]
+
+    def __init__(
+        self,
+        id: int,
+        name: str,
+        chr: str,
+        interval: Tuple[int, int],
+        sign: str,
+        exons: List[Tuple[int, int]],
+    ):
+        self.id = id
+        self.name = name
+        self.chr = chr
+        self.interval = interval
+        self.sign = sign
+
+        # Assumes that constructor calls sends in the start positions 1-based
+        # (both for BED and GTF)
+        self.exons = exons
+
+        self.neighbors: Set[int] = set()
+        self.snps: Set[int] = set()
+
+    def __eq__(self, other):
+        return self.name == other.name
+
+    def set_snps(self, positions: List[Tuple[int, int]]):
+        h = bisect_left(positions, self.interval[0])
+        if h == len(positions):
+            return
+        exon = 0
+        self.snps = set()
+        for p in range(h, len(positions)):
+            pos, snp = positions[p]
+            if pos > self.interval[1]:
+                break
+            e_start, e_len = self.exons[exon]
+            if pos >= e_start and pos < e_start + e_len - 1:
+                self.snps.add(snp)
+            elif pos >= start:
+                exon += 1
+
+
 @dataclass
-class RNAData:
-    states: Dict[int, int]
-    # initial_genes: Dict[int, Gene]
-    genes: Dict[int, Gene]
+class RNAGraph:
+    genes: List[Gene]
     error: float
-    # all_reads: Dict[int, Read]
-    positions: Dict[int, int]
-    names: Dict[int, str]
-    chroms: Dict[int, str]
-    isodict: Dict[str, Tuple[float, str]]
-    k: int
+    ploidy: int
+    single_reads: List[Read]
+    multi_reads: List[Read]
 
-    read_list: Dict[int, Read]
-    long_read_list: Dict[int, Read]
-
-    nodekeys: List[int]
     nodes: Dict[int, Node]
-    chrom_list: List[str]
-    phasable_positions: Dict[str, List[int]]
-    PSdict: Dict[str, Dict[int, int]]
+
 
     comps: Dict[int, Set[int]]
     comps_dict: Dict[int, int]
@@ -52,74 +96,65 @@ class RNAData:
 
     def __init__(
         self,
-        states: Dict[int, int],
-        genes: Dict[int, Gene],
-        filtered_genes: Dict[int, Gene],
-        error: float,
-        read_list: Dict[int, Read],
-        positions: Dict[int, int],
-        names: Dict[int, str],
-        chroms: Dict[int, str],
-        isodict: Dict[str, Tuple[float, str]]
+        vcf: VCF,
+        genes: List[Gene],
+        reads: List[Read],
+        error: float
     ):
-        self.k = 2
-        self.states = states
-        # self.initial_genes = genes
-        self.genes = filtered_genes
+        self.genes = genes
         self.error = error
-        # self.all_reads = read_list
-        self.positions = positions
-        self.names = names
-        self.chroms = chroms
-        self.isodict = isodict
+        self.ploidy = 2
 
-        short_read_list: Dict[int, Read] = {}
-        long_read_list: Dict[int, Read] = {}
-        for i in read_list:
-            r = read_list[i]
-            r.rates = [0.5, 0.5]
-            if len(r.snps) == 1:
-                short_read_list[i] = r
-            else:
-                long_read_list[i] = r
+        self.single_reads = [r for r in reads if len(r.snps) == 1]
+        self.multi_reads = [r for r in reads if len(r.snps) > 1]
 
-        self.read_list = short_read_list
-        # self.short_read_list = short_read_list
-        self.long_read_list = long_read_list
+        chromosomes = {g.chr for g in genes}
+        snps = sorted({k for r in self.single_reads for k in r.snps})
+        self.nodes = {snp: Node(self.ploidy, snp, set()) for snp in snps}
 
-        self.nodekeys = sorted(list(self.node_keys()))
-
-        d: Dict[int, Node] = {}
-        chrom_list: Dict[str, int] = {}
-        for num in range(len(self.nodekeys)):
-            index = self.nodekeys[num]
-            d[index] = Node(
-                self.k,
-                index,
-                0,
-                [], #S List[int](),
-                self.positions[index],
-                self.names[index],
-                self.chroms[index],
-                num
-            )
-            chrom_list[self.chroms[index]] = 0
-        self.nodes = d
-        self.chrom_list = sorted(chrom_list.keys())
-        self.phasable_positions = {chrom: [] for chrom in self.chrom_list} #S
-        for x in self.nodekeys:
-            self.phasable_positions[self.chroms[x]].append(self.positions[x])
-        self.PSdict = self.make_position_dict()
-
-        ######################################################################
-
+        # Initialize gene SNPs and neighbours
+        phasable_positions = {}  #S
+        for s, node in self.nodes.items():
+            snp = vcf.snps[s]
+            phasable_positions.setdefault(snp.chr, []).append((snp.pos, snp))
+        for p in phasable_positions.values():
+            p.sort()
         for g in self.genes:
-            self.find_SNPs(self.genes[g])
-        make_genomic_graph(self.genes)
+            if g.chr in phasable_positions:
+                g.set_snps(phasable_positions[g.chr])
+        s_dict: Dict[int, Set[int]] = {}  # SNP to gene
+        for gi, g in enumerate(self.genes):
+            for s in g.snps:
+                s_dict[s].add(gi)
+        for g in genes:
+            g.neighbors = {n for s in g.snps for n in s_dict[s]}
 
-        ######################################################################
+        # Build components
+        comps, comps_dict = build_components(genes)
 
-        reads = read_list
+        comps_mins_dict = gene_comps_by_mins(comps, comps_dict)
+        S_G, G_S = snp_to_genomic_region(comps_mins_dict, genes)
+        reads_by_gene = {m: [] for m in comps_mins_dict} #S
+        reads_by_gene[OVER_SEEN]: List[Read] = []
+        reads_by_gene[NOT_SEEN]: List[Read] = []
+
+        for R in reads.values():
+            regions: Set[int] = {}
+            for s in R.snps:
+                if s in S_G:
+                    regions.add(S_G[s])
+                else:
+                    regions.add(NOT_SEEN)
+            if len(regions) == 1:
+                m = list(regions)[0]
+                # R.region = m
+                reads_by_gene[m].append(R)
+            else:
+                reads_by_gene[OVER_SEEN].append(R)
+
+        return comps, comps_dict, comps_mins_dict, S_G, G_S, reads_by_gene
+
+
         (
             self.comps,
             self.comps_dict,
@@ -128,17 +163,10 @@ class RNAData:
             self.genomic_region_to_SNPs,
             self.reads_by_GR
         ) = assign_reads_to_genomic_regions(self.genes, reads)
-        # self.reads_by_indiv_gene = self.assign_reads_to_indiv_genes()
-
-        ######################################################################
-
         # Here is where we decide which types of genes to use, those with no isoforms ("no_splicing")
         # all SNPs such that if there are multiple isoforms, those SNPs fall into all of them ("final")
-
         # self.final = self.dual_gene()
         self.snps_to_use = self.find_snps_to_use_all()
-
-        ######################################################################
 
         self.reads_by_comsnps = self.find_reads_by_comsnps()
         self.read_dict = self.make_read_dict()  ##1-reads only
@@ -148,47 +176,6 @@ class RNAData:
         self.rates = self.assign_rates2(self.snps_to_use)
 
     ######################################################################
-
-    def node_keys(self) -> List[int]:
-        s = {k: 0 for r in self.read_list.values() for k in r.snps}
-        return list(s.keys())
-
-    def make_position_dict(self) -> Dict[str, Dict[int, int]]:
-        position_to_SNP_index_dict = {chrom: Dict[int, int]() for chrom in self.chrom_list}
-        for s in self.nodekeys:
-            S = self.nodes[s]
-            c = S.chrom
-            p = S.pos
-            position_to_SNP_index_dict[c][p] = S.index
-        return position_to_SNP_index_dict
-
-    def dual_gene(self) -> Dict[int, List[int]]:
-        D: Dict[int, List[List[int]]] = {}
-        final: Dict[int, List[int]] = {}
-        for gr in self.genomic_region_to_SNPs:
-            snps = self.genomic_region_to_SNPs[gr]
-            start = self.comps
-            D[gr] = {s: [] for s in snps} #S
-            start = gr
-            if len(self.comps[start]) == 1:
-                gene = self.genes[list(self.comps[start])[0]]
-                final[min(gene.snps)] = sorted(gene.snps)
-            else:
-                for gene in self.comps[start]:
-                    for snp in self.genes[gene].snps:
-                        D[gr][snp].append(gene)
-
-                for snp in D[gr]:
-                    D[gr][snp] = sorted(D[gr][snp])
-                tmp: Dict[List[int], List[int]] = {}
-                for s in D[gr]:
-                    if D[gr][s] not in tmp:
-                        tmp[D[gr][s]] = [s]
-                    else:
-                        tmp[D[gr][s]].append(s)
-                for snps in tmp.values():
-                    final[min(snps)] = sorted(snps)
-        return final
 
     def find_snps_to_use_all(self) -> Dict[int, List[int]]:
         snps_to_use: Dict[int, List[int]] = {}
@@ -266,62 +253,8 @@ class RNAData:
 
     ############################################################
 
-    def make_components(self, snps_to_use: Dict[int, List[int]]):
-        comp_mins: List[int] = []
-        comps: Dict[int, List[int]] = {}
-        for start in snps_to_use:
-            snps = snps_to_use[start]
-            if len(snps) > 1:
-                for snp in snps:
-                    comps[snp] = snps
-                comp_mins.append(start)
-        self.components, self.comp_mins = comps, sorted(comp_mins)
-
-    def find_SNPs(self, g: Gene):
-        s = self.find_next_SNP(g, g.bp_start)
-
-        if s == -1:
-            g.snps: Set[int] = {}
-        else:
-            S = self.nodes[s]
-            num = S.num
-            ALL_SNPS: List[Node] = []
-            while S.pos < g.bp_end:
-                ALL_SNPS.append(S)
-                num += 1
-                if num < len(self.nodekeys):
-                    S = self.nodes[self.nodekeys[num]]
-                else:
-                    break
-            L = len(ALL_SNPS)
-            r_i = 0
-            s_i = 0
-
-            snps = {i: [] for i in range(g.exon_count)} #S
-            while s_i < L:
-                S = ALL_SNPS[s_i]
-                r = g.ranges[r_i]
-                tf = (S.pos >= r[0], S.pos < r[1])
-                if tf[0] and tf[1]:
-                    snps[r_i].append(S)
-                    s_i += 1
-                elif tf[0]:
-                    r_i += 1
-                elif tf[1]:
-                    s_i += 1
-            g.snps = {y.index for x in snps.values() for y in x}
-
-    def find_next_SNP(self, g: Gene, b: int) -> int:
-        if g.chrom not in self.phasable_positions:
-            return -1
-        else:
-            positions = self.phasable_positions[g.chrom]
-            h = bisect_left(positions, b)
-            return self.PSdict[g.chrom][positions[h]] if h < len(positions) else -1
-
-
 def make_data_from_RNA_data(RD: RNAData) -> Data:
-    read_list = RD.long_read_list
+    read_list = RD.multi_reads
     data = edges_from_readlist(read_list)
     return Data(
         data, RD.states, RD.k, RD.error, read_list, RD.positions, RD.names, RD.chroms
