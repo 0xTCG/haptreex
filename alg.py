@@ -1,35 +1,34 @@
 from math import log
-from read import Read
+from read import SNP, Read
+from graph import Graph
 from common import CONFIDENCE
-from mytime import timing
 from random import choice
-import sys
 from copy import copy
-from typing import Tuple, Dict, List, Set, NamedTuple
+from typing import Tuple, Dict, List, Set, NamedTuple, Optional
 
 
 class Phase(NamedTuple):
-    haplotypes: List[Dict[SNP, int]] # A dictionary for each haplotype
+    haplotypes: List[Dict[int, int]]  # A (SNP ID -> Allele) dict for each haplotype
     score: float
 
 
 def read_val_tail(
-    haplotypes: List[Dict[SNP, int]]
+    haplotypes: List[Dict[int, int]],
     pair_threshold: float,
     error: float,
     relevant_reads: List[Read],
-    last_snp: SNP,
-    prev_snp: Optional[SNP]
+    last_snp: int,
+    prev_snp: int
 ) -> float:
     """
     we extend a phasing and then calculating how likely that extension is
     this looks at the prob of a particular phasing generating the Set of reads
-    which cover "end" ( = "last_snp") and for which "end" is not the smallest SNP in the read.
-    (relevant reads for the extension)
+    which cover "end" ( = "last_snp") and for which "end" is not the smallest SNP
+    in the read (relevant reads for the extension).
     this log prob gets added to the log prob of the non-extended phasing.
     """
 
-    assert len(haplotypes) == 2 # Diploid for now
+    assert len(haplotypes) == 2  # Diploid for now
 
     a = (1 - error) / (1 - (2 * error / 3.0))
     b = (error / 3.0) / (1 - (2 * error / 3.0))
@@ -50,10 +49,10 @@ def read_val_tail(
             if not last_snp == read.special_snp:
                 val2 += log(probs2) * read.count
 
-    # pair_threshold is some measure of likelihood of adjacent mutations occuring together
-    # since we've know extended the haplotype we need to update the prior
+    # pair_threshold is some measure of likelihood of adjacent mutations occuring \
+    # together since we've know extended the haplotype we need to update the prior
     if len(haplotypes[0]) > 1:
-        assert prev_snp
+        assert prev_snp != -1
         val += log(
             pair_threshold
             if haplotypes[0][last_snp] == haplotypes[0][prev_snp]
@@ -64,9 +63,9 @@ def read_val_tail(
 
 def branch(
     phases: List[Phase],
-    snp: SNP,
-    prev_snp: Optional[SNP],
-    relevant_reads: list[Read],
+    snp: int,
+    prev_snp: int,
+    relevant_reads: List[Read],
     threshold: float,
     pair_threshold: float,
     error: float,
@@ -80,13 +79,15 @@ def branch(
 
     new_phases = []
     configs, costs = [(0, 1), (1, 0)], [0.0, 0.0]
-    for partial, score in enumerate(phases):
+    for partial, score in phases:
         assert len(partial) == 2
         # extend solution
         for i in range(2):
             # adding possible orderings of alleles for new SNP for diploid
             partial[0][snp], partial[1][snp] = configs[i]
-            costs[i] = read_val_tail(partial, pair_threshold, error, relevant_reads, snp, prev_snp)
+            costs[i] = read_val_tail(
+                partial, pair_threshold, error, relevant_reads, snp, prev_snp
+            )
         max_cost = max(costs[0], costs[1])
         used = False
         for i in range(2):
@@ -94,7 +95,7 @@ def branch(
                 # adds extension with allele ordering c if sufficiently likely
                 extended = partial
                 if used:
-                    extended = (copy(partial[0]), copy(partial[1]))
+                    extended = [copy(partial[0]), copy(partial[1])]
                 else:
                     used = True
                 extended[0][snp], extended[1][snp] = configs[i]
@@ -106,7 +107,6 @@ def prune(
     phases: List[Phase],
     is_last: bool
 ) -> List[Phase]:
-    lists, table = phase
     # prune solutions based on number of solutions and thresholds
     threshold = 1.0
     if is_last: threshold = 1.0
@@ -116,27 +116,30 @@ def prune(
     else: threshold = 0.001
     threshold = abs(log(threshold)) + 0.0001
 
-    min_val = min(table)
+    min_val = min(p.score for p in phases)
     nphases = [p for p in phases if abs(p.score - min_val) < threshold]
     if is_last:
-        nphases = choice(nphases)
+        nphases = [choice(nphases)]
     return nphases
 
 
 def parallel(
     graph: Graph,
-    root: SNP,
+    root: int,
     threshold: float,
     pair_threshold: float,
     error: float,
 ) -> Phase:
     phases = [Phase([{}, {}], 0.0)]
-    skipped = True  # Set to True to allow allele permutations; changed from original False
-    prev_snp: SNP = None # SEQ/TODO: check! originally None
-    for snp in graph.components[root]:
+    skipped = True  # Set to True to allow allele permutations; changed from False
+    prev_snp = -1
+    for snp in graph.components[root].snps:
         if skipped:
-            phases = branch(phases, snp, prev_snp, graph.reads[snp], threshold, pair_threshold, error)
-            phases = prune(phases, snp == graph.components[snp][-1])
+            phases = branch(
+                phases, snp, prev_snp, graph.snp_reads[snp], threshold, pair_threshold,
+                error
+            )
+            phases = prune(phases, snp == graph.components[root].snps[-1])
         else:  # specify beginning to remove allele permutations
             phases = [Phase([{}, {}], 0.0)]
             skipped = True
@@ -149,10 +152,10 @@ def phase(
     threshold: float,
     pair_threshold: float,
     error: float
-) -> Dict[SNP, Phase]:
+) -> Dict[int, Phase]:
     threshold = log(threshold / (1 - threshold))
-    print(f'Phasing {len(graph.component_roots)} components...')
+    print(f'Phasing {len(graph.components)} components...')
     result = {}
-    for root in enumerate(graph.component_roots):
-        result[r] = parallel(graph, root, threshold, pair_threshold, error)
+    for root in graph.components:
+        result[root] = parallel(graph, root, threshold, pair_threshold, error)
     return result

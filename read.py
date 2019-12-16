@@ -11,21 +11,25 @@ class SNP(NamedTuple):
     alleles: List[str]
 
     def __lt__(self, other):
-        return (self.chr, self.pos) < (other.chr, other.pos)
+        return self.id < other.id
 
     def __repr__(self):
         return f"{self.id}"
 
-@dataclass
+    def __hash__(self):
+        return id.__hash__()
+
+
+@dataclass(init=False)
 class Read:
-    id: int # Unique read ID
-    count: int # Support
-    snps: Dict[SNP, int] # SNP -> Allele
+    id: int  # Unique read ID
+    count: int  # Support
+    snps: Dict[int, int]  # SNP ID -> Allele
     # The following are used in alg.py:read_val_tail
-    special_snp: SNP
+    special_snp: int  # SNP ID
     rates: List[float]
 
-    def __init__(self, snps: Dict[SNP, int], count: int, id: int):
+    def __init__(self, snps: Dict[int, int], count: int, id: int):
         self.id = id
         self.count = count
         self.snps = snps
@@ -33,7 +37,7 @@ class Read:
         self.rates = [0.5, 0.5]
 
     def __eq__(self, other):
-        return self.snps == other.snps and self.id == other.id
+        return self.id == other.id and self.snps == other.snps
 
     def __len__(self):
         return len(self.snps)

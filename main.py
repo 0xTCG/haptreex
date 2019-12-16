@@ -1,21 +1,20 @@
-from common import V, DOT
 from mytime import timing
 import datagen
-import joint
-import rna
+# import joint
+# import rna
 import graph
 import alg
-import stats
+# import stats
 import output
-import os
 import sys
 import random
 # import chair
 from getopt import gnu_getopt as getopt, GetoptError
-from typing import Dict, List, Set, Tuple
+from typing import Tuple
 
 print('HapTree-X v1.0 [Seq]')
 random.seed(51)
+
 
 def parse_args() -> Tuple[str, str, str, str, str, str]:
     try:
@@ -68,15 +67,17 @@ def parse_args() -> Tuple[str, str, str, str, str, str]:
         print(f'{err}')
         sys.exit(2)
 
-vcf, DNAfragmat, RNAfragmat, gene_data, outputname, isoforms = parse_args()
+vcf_path, DNAfragmat, RNAfragmat, gene_data, outputname, isoforms = parse_args()
 
 PHASE_THRESHOLD = 0.001
 PAIR_THRESHOLD = 0.7
 PHASE_ERROR = 0.02
 
-graph = datagen.load_dna_data(vcf, [DNAfragmat], error=0.02)
-phases = alg.phase(graph, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
-output.make_solution(graph, phases, outputname)
+with timing('graph'):
+    vcf, graph = datagen.load_dna_data(vcf_path, [DNAfragmat], error=0.02)
+with timing('phase'):
+    phases = alg.phase(graph, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
+output.make_solution(vcf, graph, phases, outputname)
 
 
 # with timing('Main'):
