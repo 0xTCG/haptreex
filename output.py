@@ -1,5 +1,5 @@
 from read import SNP, Read
-from datagen import VCF
+from files import VCF
 from alg import Phase
 from graph import Graph
 # from rna import RNAData

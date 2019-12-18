@@ -2,10 +2,9 @@ from bisect import bisect_left
 from graph import Node, build_components, Component
 # from gene import make_genomic_graph, assign_reads_to_genomic_regions
 from read import Read
-from rates import find_rates
+from rates import find_rates, score
 from typing import Tuple, Dict, List, Set
 from dataclasses import dataclass
-from common import score
 from pprint import pprint
 from math import log
 import sys

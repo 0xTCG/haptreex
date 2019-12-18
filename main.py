@@ -1,11 +1,9 @@
-from mytime import timing
-import datagen
+import files
 import graph
 import output
 import sys
 import alg
 import random
-import joint
 # import chair
 from getopt import gnu_getopt as getopt, GetoptError
 from typing import Tuple
@@ -73,7 +71,7 @@ PAIR_THRESHOLD = 0.7
 PHASE_ERROR = 0.02
 
 print(f"Loading VCF file {vcf_path}...")
-vcf = datagen.parse_vcf(vcf_path)
+vcf = files.parse_vcf(vcf_path)
 print(f"{len(vcf.snps)} SNPs in VCF file")
 
 if dna == "" and rna == "":
@@ -81,20 +79,13 @@ if dna == "" and rna == "":
 elif gtf == "" or rna == "":
     print("Running DNA/RNA phasing without DASE (no gene data provided)")
     dnas = ([dna] if dna else []) + ([rna] if rna else [])
-    g = datagen.load_dna_data(vcf, dnas)
-    phases = alg.phase(g, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
-    output.make_solution(vcf, g, phases, out)
+    g = files.load_dna_data(vcf, dnas)
 else:
-    r = datagen.load_rna_data(vcf, gtf, [rna], isoforms)
-    #    stats.stats(RD, 2, 0.2, 0.6, 0, 2, 0.001, 0.2)
-    g = graph.Graph(r.multi_reads, r.ploidy) if not dna \
-        else datagen.load_dna_data(vcf, [dna], r.multi_reads)
-    jG = joint.JointGraph(r, g)
-    phases = alg.phase(jG, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
-    output.make_solution(vcf, jG, phases, out)
-    # output.make_solution_simple(
-    #     jGX,
-    #     out,
-    #     vcfChroms,
-    #     vcfPositions
-    # )  # Phasing using both 1-reads and 2-reads from dna + RNAfragmat
+    r = files.load_rna_data(vcf, gtf, [rna], isoforms)
+    if not dna:
+        g = graph.Graph(r.multi_reads, r.ploidy)
+    else:
+        g = files.load_dna_data(vcf, [dna], r.multi_reads)
+    g.integrate_rna(r)
+phases = alg.phase(g, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
+output.make_solution(vcf, g, phases, out)

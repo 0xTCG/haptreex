@@ -1,10 +1,12 @@
 from math import log
-from read import SNP, Read
+from read import Read
 from graph import Graph
-from common import CONFIDENCE
 from random import choice
 from copy import copy
 from typing import Tuple, Dict, List, Set, NamedTuple, Optional
+
+
+CONFIDENCE = 0.5
 
 
 class Phase(NamedTuple):

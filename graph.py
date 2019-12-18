@@ -2,6 +2,7 @@ from itertools import combinations
 from read import SNP, Read
 from typing import Tuple, Dict, List, Set, Any
 from dataclasses import dataclass
+# from rna import RNAGraph
 
 
 @dataclass
@@ -97,5 +98,60 @@ class Graph:
                 if snp != root:
                     self.snp_reads.setdefault(snp, []).append(r)
 
-    def __iter__(self):
-        return self.nodes.values()
+    def integrate_rna(self, rna):
+        assert self.ploidy == 2
+
+        # Organize nodes
+        forward_short, back_short = {}, {}
+        for i, root in enumerate(rna.components):
+            forward_short[i] = root
+            back_short[root] = i
+        forward_long, back_long = {}, {}
+        for i, root in enumerate(self.components):
+            forward_long[i + len(rna.components)] = root
+            back_long[root] = i + len(rna.components)
+        nodes: Dict[int, Node] = {}
+        for i, root in enumerate(rna.components):
+            temp = {  # All DNA components that have some RNA nodes in this component
+                back_long[self.component_index[node]]
+                for node in rna.components[root].nodes
+                if node in self.component_index
+            }
+            nodes[i] = Node(i, temp)
+        for i, root in enumerate(self.components):
+            temp = {  # All DNA components that have some RNA nodes in this component
+                back_short[rna.component_index[node]]
+                for node in self.components[root].nodes
+                if node in rna.component_index
+            }
+            nodes[i + len(rna.components)] = Node(i + len(rna.components), temp)
+
+        # Connect all DNA and RNA components...
+        weird_components, _ = build_components(nodes)
+
+        # translate components
+        components: Dict[int, Component] = {}
+        component_index: Dict[int, int] = {}
+        for weird_root in weird_components:
+            temp_comp: Set[int] = set()
+            for weird_comp in weird_components[weird_root].nodes:
+                if weird_comp < len(rna.components):
+                    for x in rna.components[forward_short[weird_comp]].nodes:
+                        temp_comp.add(x)
+                else:
+                    for x in self.components[forward_long[weird_comp]].nodes:
+                        temp_comp.add(x)
+            n = sorted(temp_comp)
+            root = n[0]
+            components[root] = Component(root, n, [])
+            for i in n:  # Update the dictionaries
+                component_index[i] = root
+        self.components, self.component_index = components, component_index
+
+        # This does not work correctly if G is not the 2-reads from RNA-seq data.
+        self.snp_reads: Dict[int, List[Read]] = {}
+        for snp in rna.component_index:  # 1-reads
+            self.snp_reads[snp] = rna.snp_reads[snp][:]
+        for read in self.reads:
+            for snp in read.snps:
+                self.snp_reads.setdefault(snp, []).append(read)

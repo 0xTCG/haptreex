@@ -1,12 +1,14 @@
 from read import SNP, Read
 from graph import Graph
-from common import QUALITY_CUTOFF
 from dataclasses import dataclass
 from rna import Gene, RNAGraph
 # import pysam
-import bisect,sys
+import bisect
+import sys
 from typing import Tuple, Dict, List, Set, NamedTuple, Optional, Iterator, Any
-from pprint import pprint
+
+
+QUALITY_CUTOFF = 10
 
 
 @dataclass
