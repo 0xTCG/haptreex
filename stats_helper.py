@@ -3,48 +3,6 @@ from rna import RNAData
 from typing import Tuple, Dict, List, Set
 
 
-def sort_key(a: Tuple[int, float]) -> float:
-    return a[1]
-
-
-def clusters_size(
-    snps: List[int], counts: Dict[int, List[int]], sum_factor: int
-) -> List[List[int]]:
-    tmp_dict = {s: float(sum(counts[s])) for s in snps}
-    order = sorted(tmp_dict.items(), key=sort_key)
-
-    clusters = [[order[0][0]]]
-    for j in range(len(order) - 1):
-        s0 = order[j][0]
-        s1 = order[j + 1][0]
-        if tmp_dict[s1] < sum_factor * tmp_dict[s0]:
-            clusters[-1].append(s1)
-        else:
-            clusters.append([s1])
-    return clusters
-
-
-def clusters_rate(
-    snps: List[int], counts: Dict[int, List[int]], rate_factor: float
-) -> List[List[int]]:
-    tmp_dict = {s: max(counts[s]) / float(sum(counts[s])) - 0.5 for s in snps}
-    order = sorted(tmp_dict.items(), key=sort_key)
-
-    clusters = [[order[0][0]]]
-    for j in range(len(order) - 1):
-        s0 = order[j][0]
-        s1 = order[j + 1][0]
-        if tmp_dict[s1] < rate_factor + tmp_dict[s0]:
-            clusters[-1].append(s1)
-        else:
-            clusters.append([s1])
-    return clusters
-
-
-def new_score(pair: List[int], rates: Tuple[float, float], conf: float) -> float:
-    r = conf * max(min(rates), 0.05) + 0.5 * (1 - conf)
-    k, n = min(pair), sum(pair)
-    return max(-(n - 2 * k) * log(r / (1 - r)), log(2.0))
 
 
 def update_snps_to_use_size_cluster(

@@ -1,12 +1,11 @@
 from itertools import combinations
 from read import SNP, Read
-from typing import Tuple, Dict, List, Set
+from typing import Tuple, Dict, List, Set, Any
 from dataclasses import dataclass
 
 
 @dataclass
 class Node:
-    ploidy: int
     snp: int  # Here, only SNP IDs are being used
     neighbors: Set[int]
 
@@ -19,20 +18,13 @@ class Node:
 
 @dataclass
 class Component:
-    root: int  # Root SNP
-    snps: List[int]  # List of nodes
+    root: int  # Root node ID
+    nodes: List[int]  # List of nodes
     reads: List[Read]  # Supporting reads
-
-    # component_roots: List[int]  # List of root SNP IDs for each component
-    # components: Dict[int, List[int]]  # {SNP ID: [sorted list of reachable SNP IDs]}
-    # component_reads: Dict[int, List[Read]]  # List of reads that support component
-    # snp_reads: Dict[int, List[Read]]  # Reads for each SNP
-
 
 
 def build_components(
-    snps: List[int],
-    nodes: Dict[int, Node]
+    nodes: Dict[int, Any]
 ) -> Tuple[Dict[int, Component], Dict[int, int]]:
     """
     Build connected components:
@@ -43,10 +35,10 @@ def build_components(
     """
     comps: Dict[int, Component] = {}
     index: Dict[int, int] = {}
-    unbuilt = set(snps)
+    unbuilt = set(nodes.keys())
     while len(unbuilt) > 0:
         start = unbuilt.pop()  # Take a random SNP
-        # Find all SNPs that are reachable from start
+        # Find all nodes that are reachable from start
         comp, old_batch = {start}, {start}
         while len(old_batch) > 0:
             new_batch: Set[int] = set()
@@ -57,11 +49,11 @@ def build_components(
             old_batch = new_batch
         unbuilt -= comp
 
-        snps = sorted(comp)
-        root = snps[0]
-        comps[root] = Component(root, snps, [])
-        for snp in snps:  # Update the dictionaries
-            index[snp] = root
+        n = sorted(comp)
+        root = n[0]
+        comps[root] = Component(root, n, [])
+        for i in n:  # Update the dictionaries
+            index[i] = root
     return comps, index
 
 
@@ -69,37 +61,33 @@ def build_components(
 class Graph:
     reads: List[Read]  # List of read objects
     ploidy: int
-    error: float
 
     snps: List[int]  # Sorted list of SNP IDs
     nodes: Dict[int, Node]  # Mapping from a SNP ID to a node
 
     components: Dict[int, Component]  # {Component ID: Component}
-    component_index: Dict[int, int]  # SNP ID: Component ID
+    component_index: Dict[int, int]
     snp_reads: Dict[int, List[Read]]  # Reads for each SNP
 
     def __init__(
         self,
         reads: List[Read],
-        ploidy: int,
-        error: float
+        ploidy: int
     ):
         self.reads = reads
         self.ploidy = ploidy
-        self.error = error
 
         self.snps = sorted({s for r in reads for s in r.snps})
         print(f"{len(self.snps)} SNPs in non-trivial connected components")
-        # returns dictionary mapping NODE to those snps adjacent to NODE
         adj: Dict[int, Set[int]] = {i: set() for i in self.snps}  #S SNP -> adj. SNPs
         for r in reads:
             for i in r.snps:
                 for j in r.snps:
                     adj[i].add(j)
-        self.nodes = {snp: Node(ploidy, snp, adj[snp]) for snp in self.snps}
+        self.nodes = {snp: Node(snp, adj[snp]) for snp in self.snps}
 
         # Build connected components
-        self.components, self.component_index = build_components(self.snps, self.nodes)
+        self.components, self.component_index = build_components(self.nodes)
 
         self.snp_reads = {s: [] for s in self.snps}  #S SNP -> List of reads
         for r in self.reads:

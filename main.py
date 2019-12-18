@@ -1,13 +1,11 @@
 from mytime import timing
 import datagen
-# import joint
-# import rna
 import graph
-import alg
-# import stats
 import output
 import sys
+import alg
 import random
+import joint
 # import chair
 from getopt import gnu_getopt as getopt, GetoptError
 from typing import Tuple
@@ -67,62 +65,36 @@ def parse_args() -> Tuple[str, str, str, str, str, str]:
         print(f'{err}')
         sys.exit(2)
 
-vcf_path, DNAfragmat, RNAfragmat, gene_data, outputname, isoforms = parse_args()
+
+vcf_path, dna, rna, gtf, out, isoforms = parse_args()
 
 PHASE_THRESHOLD = 0.001
 PAIR_THRESHOLD = 0.7
 PHASE_ERROR = 0.02
 
-with timing('graph'):
-    vcf, graph = datagen.load_dna_data(vcf_path, [DNAfragmat], error=0.02)
-with timing('phase'):
-    phases = alg.phase(graph, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
-output.make_solution(vcf, graph, phases, outputname)
+print(f"Loading VCF file {vcf_path}...")
+vcf = datagen.parse_vcf(vcf_path)
+print(f"{len(vcf.snps)} SNPs in VCF file")
 
-
-# with timing('Main'):
-#     if DNAfragmat == "" and RNAfragmat == "": # 1, 2
-#         print("Need either RNA or DNA data to phase")
-#     elif DNAfragmat == "" and gene_data == "": # 3
-#         print("Running RNA phasing without DASE (no gene data provided)")
-#         D = datagen.make_data_from_fragmat([RNAfragmat], vcf, 0.02)
-#         G = graph.Graph(D)
-#         GX = alg.RNA_phase(0.001, pair_thresh, 0.02, G.read_dict, G.comp_mins, G.components)
-#         output.make_solution(GX, G, outputname)
-#     elif DNAfragmat != "" and (RNAfragmat == "" or gene_data == ""): # 5, 6, 7
-#         print("Running DNA phasing without DASE (either no RNA or no gene data provided)")
-#         D: graph.Data = None
-#         with timing('[1] Making fragmat'):
-#             DNAfragmats = [DNAfragmat, RNAfragmat] if RNAfragmat != "" else [DNAfragmat]
-#             D = datagen.make_data_from_fragmat(DNAfragmats, vcf, 0.02)
-#         G: graph.Graph = None
-#         with timing('[2] Making graph'):
-#             G = graph.Graph(D)
-#         with timing('[3] Phasing'):
-#             GX = alg.RNA_phase(0.001, pair_thresh, 0.02, G.read_dict, G.comp_mins, G.components)
-#             output.make_solution(GX, G, outputname)
-    # else: # 4, 8
-    #     RD: rna.RNAData = None
-    #     with timing('[1] Making RNA fragmat'):
-    #         RD = datagen.make_RNA_data_from_fragmat(gene_data, [RNAfragmat], vcf, 0.02, isoforms)
-    #     with timing('[2] Stats'):
-    #         stats.stats(RD, 2, 0.2, 0.6, 0, 2, 0.001, 0.2)
-    #     jG: joint.JointGraph = None
-    #     with timing('[3] Graph'):
-    #         D = None
-    #         if DNAfragmat == "":
-    #             D = rna.make_data_from_RNA_data(RD)
-    #         else:
-    #             D = datagen.make_data_from_fragmat([DNAfragmat], vcf, 0.02, RD.long_read_list)
-    #         G = graph.Graph(D)
-    #         jG = joint.JointGraph(RD, G)
-    #     with timing('[4] Phasing'):
-    #         jGX = alg.RNA_phase(
-    #             0.001, pair_thresh, 0.02, jG.read_dict, jG.comp_mins, jG.components
-    #         )
-    #         output.make_solution_simple(
-    #             jGX,
-    #             outputname,
-    #             vcfChroms,
-    #             vcfPositions
-    #         )  # Phasing using both 1-reads and 2-reads from DNAfragmat + RNAfragmat
+if dna == "" and rna == "":
+    print("Need either RNA or DNA data to phase")
+elif gtf == "" or rna == "":
+    print("Running DNA/RNA phasing without DASE (no gene data provided)")
+    dnas = ([dna] if dna else []) + ([rna] if rna else [])
+    g = datagen.load_dna_data(vcf, dnas)
+    phases = alg.phase(g, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
+    output.make_solution(vcf, g, phases, out)
+else:
+    r = datagen.load_rna_data(vcf, gtf, [rna], isoforms)
+    #    stats.stats(RD, 2, 0.2, 0.6, 0, 2, 0.001, 0.2)
+    g = graph.Graph(r.multi_reads, r.ploidy) if not dna \
+        else datagen.load_dna_data(vcf, [dna], r.multi_reads)
+    jG = joint.JointGraph(r, g)
+    phases = alg.phase(jG, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
+    output.make_solution(vcf, jG, phases, out)
+    # output.make_solution_simple(
+    #     jGX,
+    #     out,
+    #     vcfChroms,
+    #     vcfPositions
+    # )  # Phasing using both 1-reads and 2-reads from dna + RNAfragmat

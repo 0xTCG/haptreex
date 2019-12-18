@@ -74,7 +74,29 @@ def snp_to_genomic_region(
 def assign_reads_to_genomic_regions(
     genes: List[Gene], reads: List[Read]
 ):
+    comps, comps_dict = build_all_genomic_comps(genes)
+    pprint({ genes[g].name: sorted(genes[q].name for q in y) for g, y in self.comps.items()})
+    comps_mins_dict = gene_comps_by_mins(comps, comps_dict)
+    S_G, G_S = snp_to_genomic_region(comps_mins_dict, genes)
+    reads_by_gene = {m: [] for m in comps_mins_dict} #S
+    reads_by_gene[OVER_SEEN]: List[Read] = []
+    reads_by_gene[NOT_SEEN]: List[Read] = []
 
+    for R in reads.values():
+        regions: Set[int] = {}
+        for s in R.snps:
+            if s in S_G:
+                regions.add(S_G[s])
+            else:
+                regions.add(NOT_SEEN)
+        if len(regions) == 1:
+            m = list(regions)[0]
+            # R.region = m
+            reads_by_gene[m].append(R)
+        else:
+            reads_by_gene[OVER_SEEN].append(R)
+
+    return comps, comps_dict, comps_mins_dict, S_G, G_S, reads_by_gene
 
 
 def build_isodict(isoforms: str) -> Dict[str, Tuple[float, str]]:

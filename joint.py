@@ -1,125 +1,71 @@
-from graph import Graph, mins_of_comps, build_all_comps
+from graph import Graph, Node, build_components, Component
 from read import Read
-from rna import RNAData
+from rna import RNAGraph
 from typing import Tuple, Dict, List, Set
 from dataclasses import dataclass
+from pprint import pprint
+import sys
 
-
-@dataclass
-class MiniNode:
-    index: int
-    neighbors: List[int]
-
-
-@dataclass
+@dataclass(init=False)
 class JointGraph:
-    RD: RNAData
-    G: Graph
-    k: int
-    short_comp_mins: List[int]
-    short_comps_dict: Dict[int, int]
-    long_comp_mins: List[int]
-    nodes: Dict[int, MiniNode]
-    nodekeys: List[int]
+    ploidy: int
+    components: Dict[int, Component]
+    component_index: Dict[int, int]
+    snp_reads: Dict[int, List[Read]]
 
-    components: Dict[int, List[int]]
-    comp_mins: List[int]
-    comps_dict: Dict[int, int]
-    read_dict: Dict[int, List[Read]]
-    comp_reads: Dict[int, List[Read]]
-
-    forward_short: Dict[int, List[int]]
-    forward_long: Dict[int, List[int]]
-    back_short: Dict[int, int]
-    back_long: Dict[int, int]
-
-
-    def __init__(self, RD: RNAData, G: Graph):
-        self.RD = RD
-        self.G = G
-        # self.read_list = RD.all_reads
-        self.k = 2
-        # self.error = G.error
-        # self.short_components = RD.components  # components induced by genes  / DASE
-        self.short_comp_mins = sorted(RD.comp_mins)
-        self.short_comps_dict = {
-            y: x for x in self.short_comp_mins for y in self.RD.components[x]
-        }
-
-        # components induced by 2+-reads (HapTree)
-        self.long_comp_mins = sorted(G.comp_mins)
-        # self.long_components = G.components
-        # self.long_comps_dict = G.comps_dict
+    def __init__(self, rna: RNAGraph, dna: Graph):
+        self.ploidy = rna.ploidy
 
         # Organize nodes
-        self.nodes: Dict[int, MiniNode] = {}
-        Ls = len(self.short_comp_mins)
-        Ll = len(self.long_comp_mins)
+        forward_short, back_short = {}, {}
+        for i, root in enumerate(rna.components):
+            forward_short[i] = root
+            back_short[root] = i
+        forward_long, back_long = {}, {}
+        for i, root in enumerate(dna.components):
+            forward_long[i + len(rna.components)] = root
+            back_long[root] = i + len(rna.components)
+        nodes: Dict[int, Node] = {}
+        for i, root in enumerate(rna.components):
+            temp = {  # All DNA components that have some RNA nodes in this component
+                back_long[dna.component_index[node]]
+                for node in rna.components[root].nodes
+                if node in dna.component_index
+            }
+            nodes[i] = Node(i, temp)
+        for i, root in enumerate(dna.components):
+            temp = {  # All DNA components that have some RNA nodes in this component
+                back_short[rna.component_index[node]]
+                for node in dna.components[root].nodes
+                if node in rna.component_index
+            }
+            nodes[i + len(rna.components)] = Node(i + len(rna.components), temp)
 
-        self.forward_short: Dict[int, List[int]] = {}
-        self.forward_long: Dict[int, List[int]] = {}
-        self.back_short: Dict[int, int] = {}
-        self.back_long: Dict[int, int] = {}
-        for i in range(Ls):
-            Ms = self.short_comp_mins[i]
-            self.forward_short[i] = self.RD.components[Ms]
-            self.back_short[Ms] = i
-        for i in range(Ls, Ls + Ll):
-            Ml = self.long_comp_mins[i - Ls]
-            self.forward_long[i] = self.G.components[Ml]
-            self.back_long[Ml] = i
-
-        for i in range(Ls):
-            self.nodes[i] = MiniNode(i, sorted(list({
-                self.back_long[self.G.comps_dict[lil_node]]
-                for lil_node in self.RD.components[self.short_comp_mins[i]]
-                if lil_node in self.G.components
-            })))
-
-        for i in range(Ls, Ll + Ls):
-            self.nodes[i] = MiniNode(i, sorted(list({
-                self.back_short[self.short_comps_dict[lil_node]]
-                for lil_node in self.G.components[self.long_comp_mins[i - Ls]]
-                if lil_node in self.RD.components
-            })))
-        self.nodekeys = sorted(self.nodes.keys())
+        # Connect all DNA and RNA components...
+        weird_components, _ = build_components(nodes)
 
         # translate components
-        weird_components, _ = build_all_comps(self)
-        self.components: Dict[int, List[int]] = {}
-        self.comps_dict: Dict[int, int] = {}
-        for c in weird_components:
-            temp_comp: Set[int] = {}
-            for C in weird_components[c]:
-                if C < Ls:
-                    for x in self.forward_short[C]:
+        self.components: Dict[int, Component] = {}
+        self.component_index: Dict[int, int] = {}
+        for weird_root in weird_components:
+            temp_comp: Set[int] = set()
+            for weird_comp in weird_components[weird_root].nodes:
+                if weird_comp < len(rna.components):
+                    for x in rna.components[forward_short[weird_comp]].nodes:
                         temp_comp.add(x)
                 else:
-                    for x in self.forward_long[C]:
+                    for x in dna.components[forward_long[weird_comp]].nodes:
                         temp_comp.add(x)
-            comp = sorted(list(temp_comp))
-            m = min(comp)
-            for s in comp:
-                self.components[s] = comp
-                self.comps_dict[s] = m
-        self.comp_mins = mins_of_comps(self.components)
-        self.read_dict, self.comp_reads = self.make_read_dict()
+            n = sorted(temp_comp)
+            root = n[0]
+            self.components[root] = Component(root, n, [])
+            for i in n:  # Update the dictionaries
+                self.component_index[i] = root
 
-    def make_read_dict(self) -> Tuple[Dict[int, List[Read]], Dict[int, List[Read]]]:
         # This does not work correctly if G is not the 2-reads from RNA-seq data.
-        read_dict: Dict[int, List[Read]] = {}
-        for s in self.RD.components:
-            read_dict[s]: List[Read] = []
-            for r in self.RD.read_dict[s]:  # 1-reads
-                read_dict[s].append(r)
-        comp_reads = {m: [] for m in self.comp_mins} #S
-        for r in self.G.data.read_list.values():
-            m = self.comps_dict[r.snps[0]]
-            comp_reads[m].append(r)
-            for k in r.snps:
-                if k in read_dict:
-                    read_dict[k].append(r)
-                else:
-                    read_dict[k] = [r]
-        return read_dict, comp_reads
-
+        self.snp_reads: Dict[int, List[Read]] = {}
+        for snp in rna.component_index:  # 1-reads
+            self.snp_reads[snp] = rna.snp_reads[snp][:]
+        for read in dna.reads:
+            for snp in read.snps:
+                self.snp_reads.setdefault(snp, []).append(read)

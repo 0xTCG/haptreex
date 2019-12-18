@@ -133,13 +133,13 @@ def parallel(
     phases = [Phase([{}, {}], 0.0)]
     skipped = True  # Set to True to allow allele permutations; changed from False
     prev_snp = -1
-    for snp in graph.components[root].snps:
+    for snp in graph.components[root].nodes:
         if skipped:
             phases = branch(
                 phases, snp, prev_snp, graph.snp_reads[snp], threshold, pair_threshold,
                 error
             )
-            phases = prune(phases, snp == graph.components[root].snps[-1])
+            phases = prune(phases, snp == graph.components[root].nodes[-1])
         else:  # specify beginning to remove allele permutations
             phases = [Phase([{}, {}], 0.0)]
             skipped = True

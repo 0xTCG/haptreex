@@ -1,19 +1,18 @@
 from read import SNP, Read
 from graph import Graph
 from common import QUALITY_CUTOFF
-from typing import Tuple, Dict, List, Set, NamedTuple, Optional, Iterator, Any
 from dataclasses import dataclass
-from RNA import RNAData
-from gene import Gene
-import pysam
-import bisect
+from rna import Gene, RNAGraph
+# import pysam
+import bisect,sys
+from typing import Tuple, Dict, List, Set, NamedTuple, Optional, Iterator, Any
 from pprint import pprint
 
 
 @dataclass
 class VCF:
     snps: List[SNP]
-    line_to_snp: Dict[int, int] # 1-based index
+    line_to_snp: Dict[int, int]  # 1-based index
     chromosomes: Set[str]
 
 
@@ -58,7 +57,7 @@ def parse_vcf(
                 snp = SNP(len(snps), chr, int(pos) - 1, id, alleles)
                 if snps and snp < snps[-1]:  # TODO
                     raise ValueError(f'VCF is not sorted (SNP {snp})')
-                line_to_snp[seen_snps] = len(snp)
+                line_to_snp[seen_snps] = len(snps)
                 snps.append(snp)
                 chromosomes.add(chr)
 
@@ -68,32 +67,32 @@ def parse_vcf(
 def parse_gtf(gtf_path: str, chroms: Set[str]) -> Iterator[Gene]:
     b = [a[:-2].split("\t") for a in open(gtf_path, "r") if a[0] != '#']
 
-    genes: List[int] = []
-    exons: List[List[Tuple[int, int]]] = []  # Gene -> List of exon (start, len)
-    for gene, line in enumerate(b):
-        if line[2] == "transcript":
-            genes.append(gene)
-            exons.append([])
-    for gene in range(len(genes)):
-        end = genes[gene + 1] if gene < len(genes) - 1 else len(b)
-        for l in range(genes[gene], end):
-            if b[l][2] == "exon":
-                exon_start = int(b[l][3])
-                exon_end = int(b[l][4])
-                exons[gene].append((exon_start, exon_end - exon_start + 1))
-    for gene in genes:
-        chrom = b[gene][0]
-        if chrom not in chroms:
-            continue
-        v = [xx.split(" ") for xx in b[gene][8].split("; ")]
-        yield Gene(
-            id=gene,
-            name=v[1][1][1:-1],
-            chr=chrom,
-            interval=(int(b[gene][3]), int(b[gene][4])),
-            sign=b[gene][6],
-            exons=exons[gene],
-        )
+    def parse_f(f):
+        x, y = f.split(" ", 1)
+        return x, y[1:-1] if y[0] == y[-1] == '"' else y
+
+    gi, i = 0, 0
+    while i < len(b):
+        if b[i][2] == "transcript":
+            chr, interval, sign, _info = (
+                b[i][0], (int(b[i][3]), int(b[i][4])), b[i][6], b[i][8]
+            )
+            if chr not in chroms:
+                continue
+            info = dict(parse_f(f) for f in _info.split("; "))
+            name = info.get("gene_name", info["transcript_id"])
+            i += 1
+            exons: List[Tuple[int, int]] = []
+            while i < len(b) and b[i][2] != "transcript":
+                if b[i][2] == "exon":
+                    exon_start, exon_end = int(b[i][3]), int(b[i][4])
+                    exons.append((exon_start, exon_end - exon_start + 1))
+                i += 1
+            # print('Adding', gi, chr, info['gene_id'], name, len(exons))
+            yield Gene(gi, name, chr, interval, sign, exons)
+            gi += 1
+        else:
+            i += 1
 
 
 def parse_read(
@@ -237,7 +236,7 @@ def parse_fragmat(
                     snp = vcf.snps[vcf.line_to_snp[idx]]
                     if not 0 <= int(allele) < len(snp.alleles):
                         raise ValueError(f'Invalid allele {allele} for SNP {snp}')
-                    alleles.append((idx, int(allele), qual[len(alleles)]))
+                    alleles.append((snp.id, int(allele), qual[len(alleles)]))
                     idx += 1
             yield name, alleles
 
@@ -250,8 +249,9 @@ def parse_phases(
     reads = []
     for path in paths:
         print(f'Parsing {path}...')
-        for _, alleles in parse_fragmat(path, vcf, skip_single):
+        for name, alleles in parse_fragmat(path, vcf, skip_single):
             if not (skip_single and len(alleles) <= 1):
+                #print(name, [(str(vcf.snps[s]), i, q) for s, i, q in alleles])
                 reads.append(alleles)
     print(f"{len(reads)} reads of sufficient quality")
 
@@ -273,50 +273,35 @@ def parse_phases(
 
 
 def load_rna_data(
-    vcf_path: str,
+    vcf: VCF,
     gtf_path: str,
     paths: List[str],
-    error: float,
     isoforms_path: str
-) -> RNAData:
-    print(f"Loading VCF file {vcf_path}...")
-    vcf = parse_vcf(vcf_path)
-    print(f"{len(vcf.snps)} SNPs in VCF file")
-
+) -> RNAGraph:
     print(f"Loading GTF {gtf_path}...")
     genes = list(parse_gtf(gtf_path, vcf.chromosomes))
     print(f"{len(genes)} genes in GTF file")
 
-    # graph = Graph(reads, ploidy=2, error=error)
-    # return vcf, graph
-    isodict: Dict[str, Tuple[float, str]] = {}
-    filtered_genes = genes
-    if isoforms != "":
-        print("Building IsoDict")
-        isodict = build_isodict(isoforms)
-        filtered_genes = filter_transcripts(genes, isodict)
+    reads = list(parse_phases(vcf, paths, skip_single=False))
+    if isoforms_path:
+        print("Building IsoDict...")
+        isodict = build_isodict(isoforms_path)
+        genes = filter_transcripts(genes, isodict)
 
-    return RNAData(vcf, filtered_genes, reads, error)
+    return RNAGraph(vcf, genes, reads, 2, .2, .6, 0, 2, .001, .2)
 
 
 def load_dna_data(
-    vcf_path: str,
+    vcf: VCF,
     paths: List[str],
-    error: float,
-    RNA_readlist: Dict[int, Read] = None
-) -> Tuple[VCF, Graph]:
-    print(f"Loading VCF file {vcf_path}...")
-    vcf = parse_vcf(vcf_path)
-    print(f"{len(vcf.snps)} SNPs in VCF file")
-
+    rna_reads: List[Read] = None
+) -> Graph:
     reads = list(parse_phases(vcf, paths, skip_single=True))
-    # if len(RNA_readlist) > 0:
-    #     max_key = max(reads.keys())
-    #     for zz in RNA_readlist:
-    #         reads[zz + max_key] = RNA_readlist[zz]
+    if rna_reads:
+        for rna_read in rna_reads:
+            reads.append(rna_read)
     for r in reads:
         r.special_snp = sorted(r.snps)[1]
         r.rates = [0.5, 0.5]
 
-    graph = Graph(reads, ploidy=2, error=error)
-    return vcf, graph
+    return Graph(reads, ploidy=2)

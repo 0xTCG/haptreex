@@ -15,7 +15,7 @@ def get_counts(
         back[snps[i]] = i
     for R in reads:
         for snp in R.snps:
-            counts[back[snp]][R.snps[snp] % 2] += R.count # originally just R.read[snp]
+            counts[back[snp]][R.snps[snp] % 2] += R.count  # originally just R.read[snp]
     return counts
 
 
@@ -44,26 +44,27 @@ def forward(
     p = p * (1 - e) + (1 - p) * (e)
     q = 1 - p
     Y = [float(y) for y in vec[i]]
+    pow10 = pow(10.0, 10.0)
     if i == 0:
         if X == 1:
             FD[1, 0] = 0.0
             return 0.0
         else:
-            val = binom(Y[0] + Y[1], Y[0]) * pow(p, Y[0]) * pow(q, Y[1]) * pow(10.0, 10.0)
+            val = binom(Y[0] + Y[1], Y[0]) * pow(p, Y[0]) * pow(q, Y[1]) * pow10
             FD[0, 0] = val
             return val
     else:
         f0 = forward(FD, 0, vec, i - 1, rate, p)
         f1 = forward(FD, 1, vec, i - 1, rate, p)
         if (0, i - 1) not in FD:
-            FD[0, i - 1] = pow(10.0, 10.0) * f0
+            FD[0, i - 1] = pow10 * f0
         if (1, i - 1) not in FD:
-            FD[1, i - 1] = pow(10.0, 10.0) * f1
+            FD[1, i - 1] = pow10 * f1
 
         SUM_log = log(trans(0, X, rate) * f0 + trans(1, X, rate) * f1)
         sample_prob_log = (Y[X] * log(p)) + (Y[1 - X] * log(q))
         binom_log = log(binom(sum(Y), Y[0]))
-        val = pow(10.0, 10.0) * exp(SUM_log + sample_prob_log + binom_log)
+        val = pow10 * exp(SUM_log + sample_prob_log + binom_log)
         if (X, i) not in FD:
             FD[X, i] = val
         return val
@@ -75,13 +76,13 @@ def NW(vec: Dict[int, List[int]], rate: float) -> float:
     dx = 0.001
     d = 1.0
 
-    def f(x: float, vec: Dict[int, List[int]], rate: float):
+    def fp(vec: Dict[int, List[int]], rate: float, x: float):
         FD: Dict[Tuple[int, int], float] = {}
         return log(
             forward(FD, 0, vec, len(vec) - 1, rate, x)
             + forward(FD, 1, vec, len(vec) - 1, rate, x)
         )
-    f = f(..., vec, rate)
+    f = lambda x: fp(vec, rate, x)
 
     def der(f, x: float, dx: float) -> float:
         return (f(x + dx) - f(x - dx)) / (2 * float(dx))
@@ -107,8 +108,11 @@ def NW(vec: Dict[int, List[int]], rate: float) -> float:
 
 
 def find_rates(snps: List[int], reads: List[Read], rate: float) -> List[float]:
-    ##if sufficient coverage, approximation works well
-    ##snps must be sorted
+    """
+    if sufficient coverage, approximation works well
+    snps must be sorted
+    """
+
     lb_for_approx = 200
     counts = get_counts(snps, reads)
     m = max(max(s) for s in counts.values())

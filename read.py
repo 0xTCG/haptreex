@@ -14,7 +14,7 @@ class SNP(NamedTuple):
         return self.id < other.id
 
     def __repr__(self):
-        return f"{self.id}"
+        return f"{self.chr}:{self.pos + 1}"
 
     def __hash__(self):
         return id.__hash__()
