@@ -1,13 +1,12 @@
+from python.mypy import *
+from math import log
 from bisect import bisect_left
+
 from graph import build_components, Component
 from read import Read
 from rates import find_rates, score
-from typing import Tuple, Dict, List, Set
-from dataclasses import dataclass
-from math import log
 
 
-@dataclass(init=False)
 class Gene:
     id: int  # index
     name: str  # a.k.a. transcript
@@ -63,7 +62,6 @@ class Gene:
                     exon += 1
 
 
-@dataclass
 class RNAGraph:
     genes: List[Gene]
     ploidy: int

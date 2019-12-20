@@ -1,21 +1,20 @@
+import getopt
+import random
+
 import files
 import graph
-import output
-import sys
 import alg
-import random
-# import chair
-from getopt import gnu_getopt as getopt, GetoptError
-from typing import Tuple
+import output
+
 
 print('HapTree-X v1.0 [Seq]')
 random.seed(51)
 
 
-def parse_args() -> Tuple[str, str, str, str, str, str]:
+def parse_args() -> tuple[str, str, str, str, str, str]:
     try:
         if sys.argv[1] == "chair":
-            opts, args = getopt(sys.argv[2:], "hv:s:t:TPC",
+            opts, args = getopt.getopt(sys.argv[2:], "hv:s:t:TPC",
                 ["help", "vcf=", "sam=", "threshold=", "TRANS=", "PCR=", "CONFLICT="]
             )
             vcf, sam, threshold = "", "", 1
@@ -36,7 +35,7 @@ def parse_args() -> Tuple[str, str, str, str, str, str]:
             #     chair.chair(vcf, sam, outputname, threshold, trans, pcr, conflict)
             sys.exit(0)
         elif sys.argv[1] == "phase":
-            opts, args = getopt(sys.argv[2:], "hv:d:r:g:i:",
+            opts, args = getopt.getopt(sys.argv[2:], "hv:d:r:g:i:",
                 ["help", "vcf=", "dna=", "rna=", "gene=", "isoform="]
             )
             vcf, DNAfragmat, RNAfragmat, gene_data, isoforms = "", "", "", "", ""
@@ -59,7 +58,7 @@ def parse_args() -> Tuple[str, str, str, str, str, str]:
     except ValueError as err:
         print(f'{err}')
         sys.exit(2)
-    except GetoptError as err:
+    except getopt.GetoptError as err:
         print(f'{err}')
         sys.exit(2)
 

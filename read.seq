@@ -1,9 +1,9 @@
+from python.mypy import *
+
 from random import choice
-from typing import Dict, List, NamedTuple
-from dataclasses import dataclass
 
 
-class SNP(NamedTuple):
+type SNP:
     id: int
     chr: str
     pos: int
@@ -20,7 +20,6 @@ class SNP(NamedTuple):
         return id.__hash__()
 
 
-@dataclass(init=False)
 class Read:
     id: int  # Unique read ID
     count: int  # Support

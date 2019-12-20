@@ -1,8 +1,9 @@
+from python.mypy import *
+
 from read import Read
 from files import VCF
 from alg import Phase
 from graph import Graph
-from typing import Dict, List
 
 
 def mec_score(ploidy: int, reads: List[Read], phase: Phase) -> int:

@@ -1,16 +1,14 @@
+import os
+from python.mypy import *
+
 from read import SNP, Read
 from graph import Graph
-from dataclasses import dataclass
 from rna import Gene, RNAGraph
-import os
-import pysam
-from typing import Tuple, Dict, List, Set, Optional, Iterator, Any
 
 
 QUALITY_CUTOFF = 10
 
 
-@dataclass
 class VCF:
     snps: List[SNP]
     line_to_snp: Dict[int, int]  # 1-based index

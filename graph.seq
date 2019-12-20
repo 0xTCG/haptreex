@@ -1,9 +1,8 @@
+from python.mypy import *
+
 from read import Read
-from typing import Tuple, Dict, List, Set, Any
-from dataclasses import dataclass
 
 
-@dataclass
 class Node:
     snp: int  # Here, only SNP IDs are being used
     neighbors: Set[int]
@@ -15,7 +14,6 @@ class Node:
         return self.snp < other.snp
 
 
-@dataclass
 class Component:
     root: int  # Root node ID
     nodes: List[int]  # List of nodes
@@ -56,7 +54,6 @@ def build_components(
     return comps, index
 
 
-@dataclass(init=False)
 class Graph:
     reads: List[Read]  # List of read objects
     ploidy: int
