@@ -150,8 +150,7 @@ def parse_read(
             elif op in [2, 3, 5, 6]:  # 'DNHP':
                 ref += sz
     # Adding an MP suffix like extractHairs to specify that matepairs are merged
-    if len(counts) > 1 and counts[0] > 0 and counts[1] > 0:
-        name += "_MP"
+    # if len(counts) > 1 and counts[0] > 0 and counts[1] > 0: name += "_MP"
     # Filter out SNPs that harbour mate-pair allele conflicts
     if ignore_conflicts:
         for i in list(cov):
@@ -173,19 +172,18 @@ def parse_bam(
     no_conflicts: bool = True
 ) -> Iterator[Tuple[str, List[Tuple[int, int, str]]]]:
     """
-    Reads a sorted SAM/BAM.
+    Reads a SAM/BAM. Does not have to be sorted.
     """
 
     seen: Dict[str, Any] = {}  # Dict[str, SAMRecord]
     seen_chrs: Set[str] = set()
     with pysam.AlignmentFile(sam_path) as sam:
         for line_i, line in enumerate(sam):
-            if line.reference_name not in seen_chrs or line_i % 100000 == 0:
-                pass
-                # print(
-                #     f'\rParsing {line.reference_name}; '
-                #     f'{len(seen):,} cached so far; '
-                #     f'{line_i:,} processed so far...', end='')
+            if line.reference_name not in seen_chrs or line_i % 1000000 == 0:
+                print(
+                    f'\rParsing {line.reference_name}; '
+                    f'{len(seen):,} cached so far; '
+                    f'{line_i:,} processed so far...', end='')
             seen_chrs.add(line.reference_name)
             name = line.query_name
             if len(name) > 2 and name[-2] in '#/':
@@ -206,14 +204,9 @@ def parse_bam(
             elif name in seen:
                 yield from parse_read(vcf, [seen[name], line], threshold, no_conflicts)
                 del seen[name]
-            # elif (
-            #     not line.mate_is_unmapped
-            #     and line.reference_name == line.next_reference_name
-            #     and line.mpos < line.pos
-            # ):
-            #     yield from parse_read(vcf, [line], threshold, no_conflicts)
             else:
                 seen[name] = line
+    print()
     for line in seen.values():
         yield from parse_read(vcf, [line], threshold, no_conflicts)
 
