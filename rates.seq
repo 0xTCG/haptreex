@@ -1,4 +1,3 @@
-from python.mypy import *
 from math import log, exp, pow, erf, sqrt
 
 from read import Read, sample_from_reads
@@ -15,12 +14,12 @@ def binom(n: float, k: float) -> float:
 
 
 def get_counts(
-    snps: List[int], reads: List[Read], shuffle: bool = True
-) -> Dict[int, List[int]]:
+    snps: list[int], reads: list[Read], shuffle: bool = True
+) -> dict[int, list[int]]:
     if shuffle:
         reads = sample_from_reads(reads)
     counts = {i: [0, 0] for i in range(len(snps))}
-    back: Dict[int, int] = {}
+    back = dict[int, int]()
     for i in range(len(snps)):
         back[snps[i]] = i
     for R in reads:
@@ -29,7 +28,7 @@ def get_counts(
     return counts
 
 
-def approx_rate(counts: List[List[int]]) -> float:
+def approx_rate(counts: list[list[int]]) -> float:
     return float(sum(max(c) for c in counts)) / float(sum(sum(c) for c in counts))
 
 
@@ -41,9 +40,9 @@ def trans(s1: int, s2: int, rate: float) -> float:
 
 
 def forward(
-    FD: Dict[Tuple[int, int], float],
+    FD: dict[tuple[int, int], float],
     X: int,
-    vec: Dict[int, List[int]],
+    vec: dict[int, list[int]],
     i: int,
     rate: float,
     p: float
@@ -80,19 +79,19 @@ def forward(
         return val
 
 
-def NW(vec: Dict[int, List[int]], rate: float) -> float:
+def NW(vec: dict[int, list[int]], rate: float) -> float:
     left = 0.001
     right = 1 - left
     dx = 0.001
     d = 1.0
 
-    def fp(vec: Dict[int, List[int]], rate: float, x: float):
-        FD: Dict[Tuple[int, int], float] = {}
+    def fp(vec: dict[int, list[int]], rate: float, x: float):
+        FD = dict[tuple[int, int], float]()
         return log(
             forward(FD, 0, vec, len(vec) - 1, rate, x)
             + forward(FD, 1, vec, len(vec) - 1, rate, x)
         )
-    f = lambda x: fp(vec, rate, x)
+    f = fp(vec, rate, ...)
 
     def der(f, x: float, dx: float) -> float:
         return (f(x + dx) - f(x - dx)) / (2 * float(dx))
@@ -117,7 +116,7 @@ def NW(vec: Dict[int, List[int]], rate: float) -> float:
     return mid
 
 
-def find_rates(snps: List[int], reads: List[Read], rate: float) -> List[float]:
+def find_rates(snps: list[int], reads: list[Read], rate: float) -> list[float]:
     """
     if sufficient coverage, approximation works well
     snps must be sorted
@@ -144,7 +143,7 @@ def cdf(n: float, k: int, var: int) -> float:
     return 0.5 * (1 + erf((k + 0.5 - mu) / sqrt(2 * n * p * (1 - p))))
 
 
-def score(pair: List[int]) -> float:
+def score(pair: list[int]) -> float:
     """
     Computing probability that a fair coin generates something as or more
     extremely biased than we we are seeing.

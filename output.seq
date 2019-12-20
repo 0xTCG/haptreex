@@ -1,12 +1,10 @@
-from python.mypy import *
-
 from read import Read
 from files import VCF
 from alg import Phase
 from graph import Graph
 
 
-def mec_score(ploidy: int, reads: List[Read], phase: Phase) -> int:
+def mec_score(ploidy: int, reads: list[Read], phase: Phase) -> int:
     """
     Computes a phase MEC score of a connected component.
     """
@@ -19,10 +17,10 @@ def mec_score(ploidy: int, reads: List[Read], phase: Phase) -> int:
     )
 
 
-def make_solution(V: VCF, G: Graph, phases: Dict[int, Phase], path: str):
-    # polyploid-ready
+def make_solution(V: VCF, G: Graph, phases: dict[int, Phase], path: str):
     with open(path, "w") as f:
-        for root, comp in sorted(G.components.items()):
+        for root in sorted(G.components.keys()):
+            comp = G.components[root]
             span = V.snps[comp.nodes[-1]].pos - V.snps[comp.nodes[0]].pos
             mec = mec_score(G.ploidy, comp.reads, phases[root])
             reads = sum(len(x) for x in comp.reads)
@@ -36,7 +34,7 @@ def make_solution(V: VCF, G: Graph, phases: Dict[int, Phase], path: str):
                 f"MEC: {mec} "
                 f"Reads: {reads}\n"
             )
-            haps = sorted(phases[root].haplotypes, key=lambda d: d[comp.nodes[0]])
+            haps = phases[root].haplotypes
             for snp in comp.nodes:
                 f.write(f"{snp + 1}\t")
                 for hap in range(G.ploidy):

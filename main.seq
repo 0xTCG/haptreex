@@ -1,6 +1,8 @@
-import getopt
 import random
+import sys
+from getopt import GetoptError, getopt
 
+import read
 import files
 import graph
 import alg
@@ -14,7 +16,7 @@ random.seed(51)
 def parse_args() -> tuple[str, str, str, str, str, str]:
     try:
         if sys.argv[1] == "chair":
-            opts, args = getopt.getopt(sys.argv[2:], "hv:s:t:TPC",
+            opts, args = getopt(sys.argv[2:], "hv:s:t:TPC",
                 ["help", "vcf=", "sam=", "threshold=", "TRANS=", "PCR=", "CONFLICT="]
             )
             vcf, sam, threshold = "", "", 1
@@ -35,7 +37,7 @@ def parse_args() -> tuple[str, str, str, str, str, str]:
             #     chair.chair(vcf, sam, outputname, threshold, trans, pcr, conflict)
             sys.exit(0)
         elif sys.argv[1] == "phase":
-            opts, args = getopt.getopt(sys.argv[2:], "hv:d:r:g:i:",
+            opts, args = getopt(sys.argv[2:], "hv:d:r:g:i:",
                 ["help", "vcf=", "dna=", "rna=", "gene=", "isoform="]
             )
             vcf, DNAfragmat, RNAfragmat, gene_data, isoforms = "", "", "", "", ""
@@ -56,10 +58,10 @@ def parse_args() -> tuple[str, str, str, str, str, str]:
         else:
             raise ValueError(f'Mode not supported')
     except ValueError as err:
-        print(f'{err}')
+        print(f'{err.message}')
         sys.exit(2)
-    except getopt.GetoptError as err:
-        print(f'{err}')
+    except GetoptError as err:
+        print(f'{err.message}')
         sys.exit(2)
 
 
@@ -69,26 +71,27 @@ PHASE_THRESHOLD = 0.001
 PAIR_THRESHOLD = 0.7
 PHASE_ERROR = 0.02
 
-DASE_ONLY = True
+DASE_ONLY = False
 PLOIDY = 2
 
 print(f"Loading VCF file {vcf_path}...")
 vcf = files.parse_vcf(vcf_path)
 print(f"{len(vcf.snps)} SNPs in VCF file")
 
+g = graph.Graph(list[read.Read](), 0)
 if dna == "" and rna == "":
     print("Need either RNA or DNA data to phase")
 elif gtf == "" or rna == "":
     print("Running DNA/RNA phasing without DASE (no gene data provided)")
-    dnas = ([dna] if dna else []) + ([rna] if rna else [])
+    dnas = ([dna] if dna else list[str]()) + ([rna] if rna else list[str]())
     g = files.load_dna_data(vcf, dnas, PLOIDY)
 else:
     assert PLOIDY == 2
     r = files.load_rna_data(vcf, gtf, [rna], isoforms)
     if not dna:
-        g = graph.Graph(r.multi_reads if not DASE_ONLY else [], r.ploidy)
+        g = graph.Graph(r.multi_reads if not DASE_ONLY else list[read.Read](), r.ploidy)
     else:
-        g = files.load_dna_data(vcf, [dna], r.multi_reads)
+        g = files.load_dna_data(vcf, [dna], PLOIDY, r.multi_reads)
     g.integrate_rna(r)
 phases = alg.phase(g, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
 output.make_solution(vcf, g, phases, out)

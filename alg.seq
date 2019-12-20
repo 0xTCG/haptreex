@@ -1,7 +1,6 @@
 from math import log
 from random import choice
 from itertools import permutations
-from python.mypy import *
 
 from read import Read
 from graph import Graph
@@ -10,16 +9,15 @@ from graph import Graph
 CONFIDENCE = 0.5
 
 
-type Phase:
-    haplotypes: List[Dict[int, int]]  # A (SNP ID -> Allele) dict for each haplotype
-    score: float
+# haplotypes: (SNP ID -> Allele) dict for each haplotype
+type Phase(haplotypes: list[dict[int, int]], score: float)
 
 
 def read_val_tail(
-    haplotypes: List[Dict[int, int]],
+    haplotypes: list[dict[int, int]],
     pair_threshold: float,
     error: float,
-    relevant_reads: List[Read],
+    relevant_reads: list[Read],
     last_snp: int,
     prev_snp: int
 ) -> float:
@@ -63,26 +61,26 @@ def read_val_tail(
 
 
 def branch(
-    phases: List[Phase],
+    phases: list[Phase],
     snp: int,
     prev_snp: int,
-    relevant_reads: List[Read],
+    relevant_reads: list[Read],
     threshold: float,
     pair_threshold: float,
     error: float,
     ploidy: int
-) -> List[Phase]:
+) -> list[Phase]:
     """
     Branch all solutions to highly probable solutions on one additional SNP
     lists include all current solutions.
     """
 
-    new_phases = []
-    configs = list(permutations(range(ploidy))), 
+    new_phases = list[Phase]()
+    configs = list(permutations(list(range(ploidy))))
     costs = [0.0] * len(configs)
     for partial, score in phases:
         for i, config in enumerate(configs):
-            for j in len(config):
+            for j in range(len(config)):
                 partial[j][snp] = config[j]
             costs[i] = read_val_tail(
                 partial, pair_threshold, error, relevant_reads, snp, prev_snp
@@ -95,16 +93,16 @@ def branch(
                     extended = [copy(partial[0]), copy(partial[1])]
                 else:
                     used = True
-                for j in len(config):
+                for j in range(len(config)):
                     extended[j][snp] = config[j]
                 new_phases.append(Phase(extended, score - costs[i]))
     return new_phases
 
 
 def prune(
-    phases: List[Phase],
+    phases: list[Phase],
     is_last: bool
-) -> List[Phase]:
+) -> list[Phase]:
     # prune solutions based on number of solutions and thresholds
     threshold = 1.0
     if is_last:
@@ -134,7 +132,7 @@ def parallel(
     error: float,
     allow_allele_permutations: bool = True
 ) -> Phase:
-    phases = [Phase([{}] * graph.ploidy, 0.0)]
+    phases = [Phase([dict[int, int]() for _ in range(graph.ploidy)], 0.0)]
     skipped = True  # set to allow allele permutations
     prev_snp = -1
     for snp in graph.components[root].nodes:
@@ -155,10 +153,10 @@ def phase(
     threshold: float,
     pair_threshold: float,
     error: float
-) -> Dict[int, Phase]:
+) -> dict[int, Phase]:
     threshold = log(threshold / (1 - threshold))
     print(f'Phasing {len(graph.components)} components...')
-    result = {}
+    result = dict[int, Phase]()
     for root in graph.components:
         result[root] = parallel(graph, root, threshold, pair_threshold, error)
     return result

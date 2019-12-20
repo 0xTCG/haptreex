@@ -1,51 +1,49 @@
-from python.mypy import *
-
 from random import choice
 
 
-type SNP:
+class SNP:
     id: int
     chr: str
     pos: int
     name: str
-    alleles: List[str]
+    alleles: list[seq]
 
-    def __lt__(self, other):
+    def __lt__(self: SNP, other: SNP):
         return self.id < other.id
 
-    def __repr__(self):
+    def __str__(self: SNP):
         return f"{self.chr}:{self.pos + 1}"
 
-    def __hash__(self):
-        return id.__hash__()
+    def __hash__(self: SNP):
+        return self.id.__hash__()
 
 
 class Read:
     id: int  # Unique read ID
     count: int  # Support
-    snps: Dict[int, int]  # SNP ID -> Allele
+    snps: dict[int, int]  # SNP ID -> Allele
     # The following are used in alg.py:read_val_tail
     special_snp: int  # SNP ID
-    rates: List[float]
+    rates: list[float]
 
-    def __init__(self, snps: Dict[int, int], count: int, id: int):
+    def __init__(self: Read, snps: dict[int, int], count: int, id: int):
         self.id = id
         self.count = count
         self.snps = snps
         self.special_snp = min(self.snps)
         self.rates = [0.5, 0.5]
 
-    def __eq__(self, other):
+    def __eq__(self: Read, other: Read):
         return self.id == other.id and self.snps == other.snps
 
-    def __len__(self):
+    def __len__(self: Read):
         return len(self.snps)
 
-    def __str__(self):
+    def __str__(self: Read):
         return f'Read.{self.snps}'
 
 
-def sample_from_reads(reads: List[Read]) -> List[Read]:
+def sample_from_reads(reads: list[Read]) -> list[Read]:
     return [
         r if len(r) else Read(dict(choice(r.snps.items())), 1, r.id)
         for r in reads

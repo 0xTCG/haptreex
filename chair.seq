@@ -41,10 +41,10 @@ class SNP:
     chr_id: int
     pos: int
     # [0] is reference and [1] [2] [3] are alternative alleles.
-    alleles: List[str]
+    alleles: list[str]
     # These flags specify whether the alleles above are valid 
     # (1 if valid, if invalid, in the VCF but not in the genotype field) 
-    valid: List[bool]
+    valid: list[bool]
     het: bool
 
 
@@ -72,11 +72,11 @@ class SNPcov:
 class Record:
     size: int
     read: str
-    alleles: List[Tuple[int, str]]
+    alleles: list[tuple[int, str]]
     qual: str
 
 
-def find_interval(snps: List[SNP], c: Chr, pos: int, sz: int):
+def find_interval(snps: list[SNP], c: Chr, pos: int, sz: int):
     beg, end = c.start, c.end
     while beg <= end:
         mid = (beg + end) // 2
@@ -97,9 +97,9 @@ def find_interval(snps: List[SNP], c: Chr, pos: int, sz: int):
 
 def process_sam(
     sam: SAMRecord, 
-    snps: List[SNP], 
-    chrs: Dict[int, Chr], 
-    snpcovs: List[SNPcov]
+    snps: list[SNP], 
+    chrs: dict[int, Chr], 
+    snpcovs: list[SNPcov]
 ):
     """Process the SAM line and add covered SNPs to the snpcovs"""
 
@@ -142,16 +142,16 @@ def process_sam(
 
 S,P,Q=0,0,0
 def parse_pair(
-    lines: List[SAMRecord], 
-    chrs: Dict[int, Chr], 
-    snps: List[SNP], 
+    lines: list[SAMRecord], 
+    chrs: dict[int, Chr], 
+    snps: list[SNP], 
     het_snp_threshold: int, 
     trans_report: bool, 
     pcr_dup: bool,
     conflict_mate: bool
 ) -> Record:
     global S,P,Q
-    snpcovs: List[SNPcov] = []
+    snpcovs: list[SNPcov] = []
     readName = lines[0].name
     if len(lines) > 1:
         if pcr_dup:
@@ -203,7 +203,7 @@ def parse_pair(
         while i + 1 < len(snpcovs) and snpcovs[i].snp_id + 1 == snpcovs[i + 1].snp_id:
             i += 1
         i += 1
-    comps, i: List[Tuple[int, List[int]]] = [], 0
+    comps, i: list[tuple[int, list[int]]] = [], 0
     while i < len(snpcovs):
         comps.append((snpcovs[i].snp_id, [snpcovs[i].allele_id]))
         while i + 1 < len(snpcovs) and snpcovs[i].snp_id + 1 == snpcovs[i + 1].snp_id:
@@ -219,8 +219,8 @@ def parse_pair(
 
 
 def parse_vcf(sam, path: str):
-    chrs: Dict[int, Chr] = {}
-    snps: List[SNP] = []
+    chrs: dict[int, Chr] = {}
+    snps: list[SNP] = []
     chr_set = {str(s): i for i, s in enumerate(sam.targets)}
     with open(path, 'r') as f:
         # Since chroms are sorted in vcf, will increase as we intercept snps
@@ -281,7 +281,7 @@ def process(
         print(f'Reading {vcf}...')
         chrs, snps = parse_vcf(sam, vcf)
 
-        prev_name, lines = "", List[SAMRecord](2)
+        prev_name, lines = "", list[SAMRecord](2)
         for line_i, line in enumerate(sam):
             if line.supplementary: # ignore multi-reads
                 continue
