@@ -1,6 +1,6 @@
 from math import log, exp, pow, erf, sqrt
 from read import Read, sample_from_reads
-from typing import Tuple, Dict, List, Set
+from typing import Tuple, Dict, List
 
 
 def binom(n: float, k: float) -> float:

@@ -1,5 +1,5 @@
 from random import choice
-from typing import Tuple, Dict, List, Set, NamedTuple
+from typing import Dict, List, NamedTuple
 from dataclasses import dataclass
 
 

@@ -1,17 +1,10 @@
 from bisect import bisect_left
-from graph import Node, build_components, Component
-# from gene import make_genomic_graph, assign_reads_to_genomic_regions
+from graph import build_components, Component
 from read import Read
 from rates import find_rates, score
 from typing import Tuple, Dict, List, Set
 from dataclasses import dataclass
-from pprint import pprint
 from math import log
-import sys
-
-
-NOTSEEN = -1
-OVERSEEN = -2
 
 
 @dataclass(init=False)
@@ -40,9 +33,6 @@ class Gene:
         self.chr = chr
         self.interval = interval
         self.sign = sign
-
-        # Assumes that constructor calls sends in the start positions 1-based
-        # (both for BED and GTF)
         self.exons = exons
 
         self.neighbors: Set[int] = set()
@@ -62,16 +52,12 @@ class Gene:
         for p in range(h, len(positions)):
             pos, snp = positions[p]
             pos += 1
-            while (
-                exon < len(self.exons)
-                and pos >= self.exons[exon][0] + self.exons[exon][1] - 1
-            ):
+            while exon < len(self.exons) and pos >= self.exons[exon][1]:
                 exon += 1
-            if pos > self.interval[1] or exon >= len(self.exons):
+            if pos >= self.interval[1] or exon >= len(self.exons):
                 break
             if pos >= self.exons[exon][0]:
-                if pos < self.exons[exon][0] + self.exons[exon][1] - 1:
-                    # print(self.name, pos, self.exons[exon][0], self.exons[exon][0]+self.exons[exon][1]-1)
+                if pos < self.exons[exon][1]:
                     self.snps.add(snp)
                 else:
                     exon += 1
@@ -94,25 +80,22 @@ class RNAGraph:
         vcf,
         genes: List[Gene],
         reads: List[Read],
-        size_factor,
-        rate_factor,
-        rate_cutoff,
-        coverage_cutoff,
-        rate_dep_cutoff,
-        cutoff,
-        conf
+        size_factor: int = 2,
+        rate_factor: float = 0.2,
+        rate_cutoff: float = 0.6,
+        coverage_cutoff: int = 0,
+        rate_dep_cutoff: int = 2,
+        cutoff: float = 0.001,
+        conf: float = 0.2
     ):
         self.ploidy = 2
         self.multi_reads = [r for r in reads if len(r.snps) > 1]
 
-        # Initialize SNP nodes
-        single_reads = [r for r in reads if len(r.snps) == 1]
-        snps = sorted({k for r in single_reads for k in r.snps})
-        # nodes = {snp: Node(snp, set()) for snp in snps}
-
-        # Initialize gene SNPs
+        # Initialize gene nodes
+        # (1) Initialize gene SNPs
         phasable_positions: Dict[str, List[Tuple[int, int]]] = {}
-        for s in snps:
+        # Add `if len(r.snps) >= 1` to the set below to enable the original behaviour
+        for s in {k for r in reads for k in r.snps}:
             snp = vcf.snps[s]
             phasable_positions.setdefault(snp.chr, []).append((snp.pos, snp.id))
         for p in phasable_positions.values():
@@ -120,8 +103,7 @@ class RNAGraph:
         for g in genes:
             if g.chr in phasable_positions:
                 g.set_snps(phasable_positions[g.chr])
-
-        # Initialize gene neighbours (genes that share a common SNP)
+        # (2) Initialize gene neighbours (genes that share a common SNP)
         snp_to_genes: Dict[int, Set[int]] = {}  # SNP to gene
         for gi, g in enumerate(genes):
             for s in g.snps:
@@ -135,63 +117,59 @@ class RNAGraph:
         gene_components, _ = build_components(
             dict((i, g) for i, g in enumerate(genes) if g.snps)
         )
-        snp_to_comp = {  # SNP_to_genomic_region
+        snp_to_comp = {  # SNP -> genic component
             snp: root
             for root, comp in gene_components.items()
             for gene in comp.nodes
             for snp in genes[gene].snps
         }
-
-        # Here is where we decide which types of genes to use:
-        # - those with no isoforms ("no_splicing")
-        # - all SNPs such that if there are multiple isoforms,
-        # - those SNPs fall into all of them ("final")
-        # self.final = self.dual_gene()
-        gene_component_to_snps = {m: [] for m in gene_components}
+        # self.final = self.dual_gene()  # Which types of genes to use?
+        comp_to_snps: Dict[int, List[int]] = {m: [] for m in gene_components}
         for s in snp_to_comp:
-            gene_component_to_snps[snp_to_comp[s]].append(s)
-        snps_to_use: Dict[int, List[int]] = {}  # root SNP -> list of SNPs in component
-        for root, snps in gene_component_to_snps.items():
+            comp_to_snps[snp_to_comp[s]].append(s)
+        comp_snps: Dict[int, List[int]] = {}  # root SNP -> list of SNPs in component
+        for root, snps in comp_to_snps.items():
             if len(snps) > 1:
                 snps.sort()
-                snps_to_use[snps[0]] = sorted(snps)
-
-        # at this point we will only use reads that fall strictly within common snps
-        # we should see how many long reads we arent using.
-        # we should consider adding those back in to make components (earlier)
-        comp_to_reads = {root: [] for root in gene_components}  #S  reads_by_GR
+                comp_snps[snps[0]] = sorted(snps)
+        # Only use reads that fall strictly within a gene
+        comp_to_reads: Dict[int, List[Read]] = {root: [] for root in gene_components}
+        NOTSEEN = -1  # NOTSEEN span non-exonic regions
+        OVERSEEN = -2  # OVERSEEN typically span exonic and intronic regions
         comp_to_reads[OVERSEEN], comp_to_reads[NOTSEEN] = [], []
         for read in reads:
-            regions = {snp_to_comp.get(snp, NOTSEEN) for snp in read.snps}
-            r = regions.pop() if len(regions) == 1 else OVERSEEN
-            assert r in comp_to_reads
-            comp_to_reads[r].append(read)
+            comps = {snp_to_comp.get(snp, NOTSEEN) for snp in read.snps}
+            # comps -= {NOTSEEN}  # Uncomment to allow reads with partial exonic span
+            comp = comps.pop() if len(comps) == 1 else OVERSEEN
+            assert comp in comp_to_reads
+            comp_to_reads[comp].append(read)
         self.snp_reads: Dict[int, List[Read]] = {}  # SNP -> 1-reads in a component
-        for root in snps_to_use:
+        for root in comp_snps:
             for read in comp_to_reads[snp_to_comp[root]]:
                 if len(read.snps) == 1:
-                    self.snp_reads.setdefault(list(read.snps.keys())[0], []).append(read)
+                    snp = list(read.snps.keys())[0]
+                    self.snp_reads.setdefault(snp, []).append(read)
                 else:
                     for snp in read.snps:
                         self.snp_reads.setdefault(snp, []).append(
                             Read({snp: read.snps[snp]}, read.count, -1)
                         )
-
+        for root, snps in comp_snps.items():
+            # Ignore SNPs that are not expressed by reads that survived till here
+            comp_snps[root] = [s for s in snps if s in self.snp_reads]
+            # print(f'SNP {snp} not expressed in reads!')
+        
         # Calculate counts and LL_dif for filtering
         self.counts: Dict[int, List[int]] = {}
         for snp in self.snp_reads:
             self.counts[snp] = [0, 0]
             for read in self.snp_reads[snp]:
                 self.counts[snp][read.snps[snp] % 2] += read.count
-        self.LL = {
-            snp: score(self.counts[snp])
-            for snps in snps_to_use.values()
-            for snp in snps
-        }
+        self.LL = {s: score(self.counts[s]) for ss in comp_snps.values() for s in ss}
 
         # Assign DASE rates
         self.rates: Dict[int, List[float]] = {}
-        for snps in snps_to_use.values():
+        for snps in comp_snps.values():
             reads = [read for snp in snps for read in self.snp_reads[snp]]
             rate = find_rates(snps, reads, 0.6)  # Choose adjacent snp rate
             for snp in snps:
@@ -203,31 +181,31 @@ class RNAGraph:
             return sum(len(s) for _, s in ss.items())
 
         # Apply filters
-        print("Original RD SNP dictionary size: ", len(snps_to_use), num(snps_to_use))
+        print("Original RD SNP dictionary size: ", len(comp_snps), num(comp_snps))
 
-        snps_to_use = self.rate_filter(snps_to_use, rate_cutoff)
-        print("STU1(rate_cutoff) RD SNP dictionary size: ", len(snps_to_use), num(snps_to_use))
+        comp_snps = self.rate_filter(comp_snps, rate_cutoff)
+        print("STU1(rate_cutoff) RD SNP dictionary size: ", len(comp_snps), num(comp_snps))
 
-        snps_to_use = self.coverage_filter(snps_to_use, coverage_cutoff)
-        print("STU2(coverage_cutoff) RD SNP dictionary size: ", len(snps_to_use), num(snps_to_use))
+        comp_snps = self.coverage_filter(comp_snps, coverage_cutoff)
+        print("STU2(coverage_cutoff) RD SNP dictionary size: ", len(comp_snps), num(comp_snps))
 
-        snps_to_use = self.size_cluster_filter(snps_to_use, size_factor)
-        print("STU3(size_factor) RD SNP dictionary size: ", len(snps_to_use), num(snps_to_use))
+        comp_snps = self.size_cluster_filter(comp_snps, size_factor)
+        print("STU3(size_factor) RD SNP dictionary size: ", len(comp_snps), num(comp_snps))
 
-        snps_to_use = self.rate_dependent_filter(snps_to_use, rate_dep_cutoff, conf)
-        print("STU4(rate_dep_cutoff,conf) RD SNP dictionary size: ", len(snps_to_use), num(snps_to_use))
+        comp_snps = self.rate_dependent_filter(comp_snps, rate_dep_cutoff, conf)
+        print("STU4(rate_dep_cutoff,conf) RD SNP dictionary size: ", len(comp_snps), num(comp_snps))
 
-        snps_to_use = self.cutoff_filter(snps_to_use, cutoff)
-        print("STU5(cutoff) RD SNP dictionary size: ", len(snps_to_use), num(snps_to_use))
+        comp_snps = self.cutoff_filter(comp_snps, cutoff)
+        print("STU5(cutoff) RD SNP dictionary size: ", len(comp_snps), num(comp_snps))
 
-        snps_to_use = self.rate_cluster_filter(snps_to_use, rate_factor)
-        print("STU6(rate_factor) RD SNP dictionary size: ", len(snps_to_use), num(snps_to_use))
+        comp_snps = self.rate_cluster_filter(comp_snps, rate_factor)
+        print("STU6(rate_factor) RD SNP dictionary size: ", len(comp_snps), num(comp_snps))
 
         # Make SNP connected components
         self.components = {}
         self.component_index = {}
-        for root in snps_to_use:
-            snps = snps_to_use[root]
+        for root in comp_snps:
+            snps = comp_snps[root]
             if len(snps) > 1:
                 self.components[root] = Component(root, snps, [])
                 for snp in snps:
@@ -254,7 +232,9 @@ class RNAGraph:
             for cluster in self.clusters_size(snps[r], size_factor)
         }
 
-    def rate_dependent_filter(self, snps: Dict[int, List[int]], cutoff: int, conf: float):
+    def rate_dependent_filter(
+        self, snps: Dict[int, List[int]], cutoff: int, conf: float
+    ):
         new: Dict[int, List[int]] = {}
         for r in snps:
             confident_snps = sorted([

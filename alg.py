@@ -3,7 +3,7 @@ from read import Read
 from graph import Graph
 from random import choice
 from copy import copy
-from typing import Tuple, Dict, List, Set, NamedTuple, Optional
+from typing import Dict, List, NamedTuple
 
 
 CONFIDENCE = 0.5
@@ -111,11 +111,16 @@ def prune(
 ) -> List[Phase]:
     # prune solutions based on number of solutions and thresholds
     threshold = 1.0
-    if is_last: threshold = 1.0
-    elif len(phases) > 1000: threshold = 0.1
-    elif len(phases) > 500: threshold = 0.05
-    elif len(phases) > 100: threshold = 0.01
-    else: threshold = 0.001
+    if is_last:
+        threshold = 1.0
+    elif len(phases) > 1000:
+        threshold = 0.1
+    elif len(phases) > 500:
+        threshold = 0.05
+    elif len(phases) > 100:
+        threshold = 0.01
+    else:
+        threshold = 0.001
     threshold = abs(log(threshold)) + 0.0001
 
     min_val = min(p.score for p in phases)

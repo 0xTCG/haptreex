@@ -1,8 +1,6 @@
-from itertools import combinations
-from read import SNP, Read
+from read import Read
 from typing import Tuple, Dict, List, Set, Any
 from dataclasses import dataclass
-# from rna import RNAGraph
 
 
 @dataclass
@@ -80,7 +78,7 @@ class Graph:
 
         self.snps = sorted({s for r in reads for s in r.snps})
         print(f"{len(self.snps)} SNPs in non-trivial connected components")
-        adj: Dict[int, Set[int]] = {i: set() for i in self.snps}  #S SNP -> adj. SNPs
+        adj: Dict[int, Set[int]] = {i: set() for i in self.snps}  # SNP -> adj. SNPs
         for r in reads:
             for i in r.snps:
                 for j in r.snps:
@@ -90,7 +88,7 @@ class Graph:
         # Build connected components
         self.components, self.component_index = build_components(self.nodes)
 
-        self.snp_reads = {s: [] for s in self.snps}  #S SNP -> List of reads
+        self.snp_reads = {s: [] for s in self.snps}  # SNP -> List of reads
         for r in self.reads:
             root = self.component_index[r.special_snp]
             self.components[root].reads.append(r)

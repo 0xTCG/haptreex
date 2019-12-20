@@ -70,6 +70,8 @@ PHASE_THRESHOLD = 0.001
 PAIR_THRESHOLD = 0.7
 PHASE_ERROR = 0.02
 
+DASE_ONLY = True
+
 print(f"Loading VCF file {vcf_path}...")
 vcf = files.parse_vcf(vcf_path)
 print(f"{len(vcf.snps)} SNPs in VCF file")
@@ -83,7 +85,7 @@ elif gtf == "" or rna == "":
 else:
     r = files.load_rna_data(vcf, gtf, [rna], isoforms)
     if not dna:
-        g = graph.Graph(r.multi_reads, r.ploidy)
+        g = graph.Graph(r.multi_reads if not DASE_ONLY else [], r.ploidy)
     else:
         g = files.load_dna_data(vcf, [dna], r.multi_reads)
     g.integrate_rna(r)
