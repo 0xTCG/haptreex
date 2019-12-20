@@ -71,6 +71,7 @@ PAIR_THRESHOLD = 0.7
 PHASE_ERROR = 0.02
 
 DASE_ONLY = True
+PLOIDY = 2
 
 print(f"Loading VCF file {vcf_path}...")
 vcf = files.parse_vcf(vcf_path)
@@ -81,8 +82,9 @@ if dna == "" and rna == "":
 elif gtf == "" or rna == "":
     print("Running DNA/RNA phasing without DASE (no gene data provided)")
     dnas = ([dna] if dna else []) + ([rna] if rna else [])
-    g = files.load_dna_data(vcf, dnas)
+    g = files.load_dna_data(vcf, dnas, PLOIDY)
 else:
+    assert PLOIDY == 2
     r = files.load_rna_data(vcf, gtf, [rna], isoforms)
     if not dna:
         g = graph.Graph(r.multi_reads if not DASE_ONLY else [], r.ploidy)

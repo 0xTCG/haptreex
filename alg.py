@@ -3,6 +3,7 @@ from read import Read
 from graph import Graph
 from random import choice
 from copy import copy
+from itertools import permutations
 from typing import Dict, List, NamedTuple
 
 
@@ -29,8 +30,6 @@ def read_val_tail(
     in the read (relevant reads for the extension).
     this log prob gets added to the log prob of the non-extended phasing.
     """
-
-    assert len(haplotypes) == 2  # Diploid for now
 
     a = (1 - error) / (1 - (2 * error / 3.0))
     b = (error / 3.0) / (1 - (2 * error / 3.0))
@@ -71,36 +70,33 @@ def branch(
     threshold: float,
     pair_threshold: float,
     error: float,
+    ploidy: int
 ) -> List[Phase]:
     """
-    k=2 only
-    branch all solutions to highly probable solutions on one additional SNP
-    lists include all current solutions
-    Dict has List index of solutions and their likelihoods
+    Branch all solutions to highly probable solutions on one additional SNP
+    lists include all current solutions.
     """
 
     new_phases = []
-    configs, costs = [(0, 1), (1, 0)], [0.0, 0.0]
+    configs = list(permutations(range(ploidy))), 
+    costs = [0.0] * len(configs)
     for partial, score in phases:
-        assert len(partial) == 2
-        # extend solution
-        for i in range(2):
-            # adding possible orderings of alleles for new SNP for diploid
-            partial[0][snp], partial[1][snp] = configs[i]
+        for i, config in enumerate(configs):
+            for j in len(config):
+                partial[j][snp] = config[j]
             costs[i] = read_val_tail(
                 partial, pair_threshold, error, relevant_reads, snp, prev_snp
             )
-        max_cost = max(costs[0], costs[1])
-        used = False
-        for i in range(2):
-            if costs[i] - max_cost >= threshold:
-                # adds extension with allele ordering c if sufficiently likely
+        t, used = threshold + max(costs), False
+        for i, config in enumerate(configs):
+            if costs[i] >= t:
                 extended = partial
                 if used:
                     extended = [copy(partial[0]), copy(partial[1])]
                 else:
                     used = True
-                extended[0][snp], extended[1][snp] = configs[i]
+                for j in len(config):
+                    extended[j][snp] = config[j]
                 new_phases.append(Phase(extended, score - costs[i]))
     return new_phases
 
@@ -136,20 +132,20 @@ def parallel(
     threshold: float,
     pair_threshold: float,
     error: float,
+    allow_allele_permutations: bool = True
 ) -> Phase:
-    phases = [Phase([{}, {}], 0.0)]
-    skipped = True  # Set to True to allow allele permutations; changed from False
+    phases = [Phase([{}] * graph.ploidy, 0.0)]
+    skipped = True  # set to allow allele permutations
     prev_snp = -1
     for snp in graph.components[root].nodes:
-        if skipped:
+        if allow_allele_permutations:
             phases = branch(
                 phases, snp, prev_snp, graph.snp_reads[snp], threshold, pair_threshold,
-                error
+                error, graph.ploidy
             )
             phases = prune(phases, snp == graph.components[root].nodes[-1])
         else:  # specify beginning to remove allele permutations
-            phases = [Phase([{}, {}], 0.0)]
-            skipped = True
+            allow_allele_permutations = True
         prev_snp = snp
     return phases[0]
 

@@ -317,14 +317,14 @@ def load_rna_data(
 def load_dna_data(
     vcf: VCF,
     paths: List[str],
-    rna_reads: List[Read] = None
+    rna_reads: List[Read] = None,
+    ploidy: int = 2
 ) -> Graph:
     reads = list(parse_phases(vcf, paths, skip_single=True))
     if rna_reads:
-        for rna_read in rna_reads:
-            reads.append(rna_read)
+        reads += rna_reads
     for r in reads:
         r.special_snp = sorted(r.snps)[1]
-        r.rates = [0.5, 0.5]
+        r.rates = [0.5] * ploidy
 
-    return Graph(reads, ploidy=2)
+    return Graph(reads, ploidy)
