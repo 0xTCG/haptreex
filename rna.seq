@@ -6,13 +6,16 @@ from read import Read, SNP
 from rates import find_rates, score
 
 
+DASE_SKIP_MULTI_READS = False
+
+
 class Gene:
     id: int  # index
     name: str  # a.k.a. transcript
     chr: str
     interval: tuple[int, int]
     sign: str
-    exons: list[tuple[int, int]]  # List of (start, len)
+    exons: list[tuple[int, int]]  # List of (start, end)
 
     neighbors: set[int]
     snps: set[int]
@@ -92,7 +95,11 @@ class RNAGraph:
         # (1) Initialize gene SNPs
         phasable_positions = dict[str, list[tuple[int, int]]]()
         # Add `if len(r.snps) >= 1` to the set below to enable the original behaviour
-        for s in {k for r in reads for k in r.snps}:
+        snp_candidates = {
+            k for r in reads for k in r.snps 
+            if not DASE_SKIP_MULTI_READS or len(r.snps) >= 1
+        }
+        for s in snp_candidates:
             snp = snps[s]
             l = phasable_positions.setdefault(snp.chr, list[tuple[int, int]]())
             l.append((snp.pos, snp.id))

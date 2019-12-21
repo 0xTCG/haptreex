@@ -34,10 +34,10 @@ def make_solution(V: VCF, G: Graph, phases: dict[int, Phase], path: str):
                 f"MEC: {mec} "
                 f"Reads: {reads}\n"
             )
-            haps = phases[root].haplotypes
+            haps = sorted([(h[root], i) for i, h in enumerate(phases[root].haplotypes)])
             for snp in comp.nodes:
                 f.write(f"{snp + 1}\t")
-                for hap in range(G.ploidy):
-                    f.write(f"{haps[hap][snp]}\t")
+                for _, hap in haps:
+                    f.write(f"{phases[root].haplotypes[hap][snp]}\t")
                 f.write(f"{V.snps[snp].chr}\t{V.snps[snp].pos + 1}\t\n")
             f.write("*****\n")

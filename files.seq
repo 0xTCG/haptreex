@@ -8,6 +8,7 @@ from rna import Gene, RNAGraph
 
 
 QUALITY_CUTOFF = 10
+CHECK_HETEROZYGOUS = True
 
 
 class VCF:
@@ -83,7 +84,7 @@ def parse_vcf(vcf_path: str, sample_name: optional[str] = None) -> VCF:
 
 
 def parse_gtf(gtf_path: str, chroms: dict[str, tuple[int, int]]) -> Gene:
-    b = [a[:-2].split("\t") for a in open(gtf_path, "r") if a[0] != '#']
+    b = [a.split("\t") for a in open(gtf_path, "r") if a[0] != '#']
 
     def parse_f(f):
         x, y = f.split(" ", 1)
@@ -92,12 +93,10 @@ def parse_gtf(gtf_path: str, chroms: dict[str, tuple[int, int]]) -> Gene:
     gi, i = 0, 0
     while i < len(b):
         if b[i][2] == "transcript":
-            chr, interval, sign, _info = (
-                b[i][0], (int(b[i][3]) - 1, int(b[i][4])), b[i][6], b[i][8]
-            )
+            chr, interval, sign = b[i][0], (int(b[i][3]) - 1, int(b[i][4])), b[i][6]
             if chr not in chroms:
                 continue
-            info = dict(parse_f(f) for f in _info.split("; "))
+            info = dict(parse_f(f.strip()) for f in b[i][8].split(";") if f.strip())
             name = info.get("gene_name", info["transcript_id"])
             i += 1
             exons = list[tuple[int, int]]()
@@ -106,7 +105,6 @@ def parse_gtf(gtf_path: str, chroms: dict[str, tuple[int, int]]) -> Gene:
                     exon_start, exon_end = int(b[i][3]) - 1, int(b[i][4])
                     exons.append((exon_start, exon_end))
                 i += 1
-            # print('Adding', gi, chr, info['gene_id'], name, len(exons))
             yield Gene(gi, name, chr, interval, sign, exons)
             gi += 1
         else:
@@ -263,7 +261,6 @@ def parse_phases(
     skip_single: bool = True
 ) -> Read:
     reads = list[list[tuple[int, int, str]]]()
-    coverages = dict[int, set[int]]()
     for path in paths:
         print(f'Parsing {path}...')
         _, ext = splitext(path)
@@ -272,18 +269,24 @@ def parse_phases(
             if ext in ['.sam', '.bam', '.cram'] 
             else parse_fragmat(vcf, path)
         )
+        coverages = dict[int, set[int]]()
+        path_reads = list[list[tuple[int, int, str]]]()
         for name, alleles in it:
             if not (skip_single and len(alleles) <= 1):
                 for pos, al, _ in alleles:
                     coverages.setdefault(pos, set[int]()).add(al)
-                reads.append(alleles)
+                path_reads.append(alleles)
+        # Ensure that all reads have expressed SNPs
+        if CHECK_HETEROZYGOUS:
+            for read in path_reads:
+                read = [i for i in read if i[0] in coverages and len(coverages[i[0]]) >= 2]
+                if len(read) and not (skip_single and len(read) <= 1):
+                    reads.append(read)
     print(f"{len(reads)} reads of sufficient quality")
 
     read_counter = dict[list[tuple[int, int]], int]()
     for r in reads:
-        key = sorted(
-            (s, a) for s, a, _ in r if s in coverages and len(coverages[s]) >= 2
-        )
+        key = sorted((s, a) for s, a, _ in r)
         if len(key) <= int(skip_single):
             continue
         if key not in read_counter:
@@ -331,11 +334,11 @@ def load_dna_data(
     vcf: VCF,
     paths: list[str],
     ploidy: int = 2,
-    rna_reads: list[Read] = None
+    rna_reads: optional[list[Read]] = None
 ) -> Graph:
     reads = list(parse_phases(vcf, paths, skip_single=True))
     if rna_reads:
-        reads += rna_reads
+        reads += ~rna_reads
     for r in reads:
         r.special_snp = sorted(r.snps)[1]
         r.rates = [0.5] * ploidy
