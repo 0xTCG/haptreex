@@ -8,23 +8,27 @@ import graph
 import alg
 import output
 import rna
-from files import CHECK_HETEROZYGOUS
-from rna import DASE_SKIP_MULTI_READS
-
+from rna import Gene
+from graph import Graph
+from alg import Phase
 
 DASE_ONLY = False
 PLOIDY = 2
 
-PHASE_THRESHOLD = 0.001
-PAIR_THRESHOLD = 0.7
-PHASE_ERROR = 0.02
+# Default: [NE RADI NA SEQu]
+# PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR, *RNA_PARAMS = \
+    # [0.001, 0.7, 0.02, 2.0, 0.2, 0.6, 0.0, 2.0, 0.001, 0.2]
 
+# Better
+PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR, RNA_PARAMS = \
+    0.001, 0.8, 0.01, [2.0, 0.2, 0.7, 0.0, 2.0, 0.001, 0.2]
 
 def parse_args(argv: list[str]):
+    global PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR
     try:
         opts, args = getopt(
             argv, 
-            "hv:d:r:g:i:o:dsp:C",
+            "hv:d:r:g:i:o:dp:z:",
             [
                 "help", 
                 "vcf=", 
@@ -34,12 +38,11 @@ def parse_args(argv: list[str]):
                 "isoform=", 
                 "out=",
                 "only-dase",
-                "dase-skip-multi",
                 "ploidy",
-                "no-check-hererozygous",
                 "phase-threshold",
                 "pair-threshold",
-                "phase-error"
+                "phase-error",
+                "z="
             ]
         )
         vcf, dna, rna, gene, isoforms, output = "", "", "", "", "", ""
@@ -50,11 +53,10 @@ def parse_args(argv: list[str]):
             elif o in ['-r', '--rna']: rna = a
             elif o in ['-g', '--gene']: gene = a
             elif o in ['-i', '--isoform']: isoforms = a
+            elif o in ['-z', '--z']: Z = a
             elif o in ['-o', '--out']: output = a
             elif o in ['-d', '--only-dase']: DASE_ONLY = True
-            elif o in ['-s', '--dase-skip-multi']: DASE_SKIP_MULTI_READS = True
             elif o in ['-p', '--ploidy']: ploidy = int(a)
-            elif o in ['-C', '--no-check-hererozygous']: CHECK_HETEROZYGOUS = False
             elif o == "--phase-threshold": PHASE_THRESHOLD = float(a)
             elif o == "--pair-threshold": PAIR_THRESHOLD = float(a)
             elif o == "--phase-error": PHASE_ERROR = float(a)
@@ -63,8 +65,32 @@ def parse_args(argv: list[str]):
     except GetoptError as err:
         raise ValueError(err.message)
 
+A = array[tuple[Graph, dict[int, Phase]]](100)
+def parse_chromosome(chri, vcf, dna, rna, genes, isoforms):
+    global A, RNA_PARAMS
+    chr_i, chr = chri
+    r_ = files.load_rna_data(vcf, chr, genes, [rna], isoforms, RNA_PARAMS)
+    g_ = files.load_dna_data(vcf, chr, [(dna, 1000)], PLOIDY)
+    return
+
+    # g: graph.Graph = None
+    # if not genes or rna == "":
+    #     dnas = list[tuple[str, int]]()
+    #     if dna: dnas.append((dna, 1000)) 
+    #     if rna: dnas.append((rna, -1))
+    #     g = files.load_dna_data(vcf, chr, dnas, PLOIDY)
+    # else:
+    #     r = files.load_rna_data(vcf, chr, genes, [rna], isoforms, RNA_PARAMS)
+    #     if not dna:
+    #         g = graph.Graph(r.multi_reads if not DASE_ONLY else list[read.Read](), r.ploidy)
+    #     else:
+    #         g = files.load_dna_data(vcf, chr, [(dna, 1000)], PLOIDY, r.multi_reads)
+    #     g.integrate_rna(r)
+    # phases = alg.phase(g, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
+    # A[chr_i] = g, phases    
 
 def main(argv: list[str]):
+    global A
     print('HapTree-X v2.0 [with Seq v0.9]')
     random.seed(51)
 
@@ -78,24 +104,23 @@ def main(argv: list[str]):
     vcf = files.parse_vcf(vcf_path)
     print(f"{len(vcf.snps)} SNPs in VCF file")
 
-    g: graph.Graph = None
+    genes = list[Gene]()
+    if gtf != "":
+        print(f"Loading GTF {gtf}...")
+        genes = list(files.parse_gtf(gtf, vcf.chromosomes))
+        print(f"{len(genes)} genes in GTF file")
+
     if dna == "" and rna == "":
         raise ValueError("Need either RNA or DNA data to phase")
-    elif gtf == "" or rna == "":
+    elif not genes or rna == "":
         print("Running DNA/RNA phasing without DASE (no gene data provided)")
-        dnas = ([dna] if dna else list[str]()) + ([rna] if rna else list[str]())
-        g = files.load_dna_data(vcf, dnas, PLOIDY)
-    else:
-        if PLOIDY != 2:
-            raise ValueError('DASE-based phasing works only for diploid genomes')
-        r = files.load_rna_data(vcf, gtf, [rna], isoforms)
-        if not dna:
-            g = graph.Graph(r.multi_reads if not DASE_ONLY else list[read.Read](), r.ploidy)
-        else:
-            g = files.load_dna_data(vcf, [dna], PLOIDY, r.multi_reads)
-        g.integrate_rna(r)
-    phases = alg.phase(g, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
-    output.make_solution(vcf, g, phases, out)
+    elif PLOIDY != 2:
+        raise ValueError('DASE-based phasing works only for diploid genomes')
+    
+    A = array[tuple[Graph, dict[int, Phase]]](len(vcf.chr_ordered))
+    enumerate(vcf.chr_ordered) ||> parse_chromosome(vcf, dna, rna, genes, isoforms)
+    # output.make_solution(vcf, [A[0]], out)
+    output.make_solution(vcf, list(A, len(vcf.chr_ordered)), out)
     print(f'HapTree-X done--- the results can be found in {out}')
 
 try:

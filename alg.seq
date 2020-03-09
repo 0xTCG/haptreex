@@ -99,10 +99,7 @@ def branch(
     return new_phases
 
 
-def prune(
-    phases: list[Phase],
-    is_last: bool
-) -> list[Phase]:
+def prune(phases: list[Phase], is_last: bool):
     # prune solutions based on number of solutions and thresholds
     threshold = 1.0
     if is_last:
@@ -118,20 +115,29 @@ def prune(
     threshold = abs(log(threshold)) + 0.0001
 
     min_val = min(p.score for p in phases)
-    nphases = [p for p in phases if abs(p.score - min_val) < threshold]
-    if is_last:
-        nphases = [choice(nphases)]
-    return nphases
+    # nphases = [p for p in phases if abs(p.score - min_val) < threshold]
+    # if is_last:
+    #     nphases = [choice(nphases)]
+    # return nphases
+    max_items = 1 if is_last else 2000
+    i = 0
+    for p in phases:
+        if abs(p.score - min_val) < threshold and i < max_items:
+            yield p
+            i += 1
 
 
+A = array[tuple[int, Phase]](1)
 def parallel(
     graph: Graph,
-    root: int,
+    rooti: tuple[int, int],
     threshold: float,
     pair_threshold: float,
     error: float,
     allow_allele_permutations: bool = True
 ) -> Phase:
+    global A
+    root_i, root = rooti
     phases = [Phase([dict[int, int]() for _ in range(graph.ploidy)], 0.0)]
     skipped = True  # set to allow allele permutations
     prev_snp = -1
@@ -141,11 +147,11 @@ def parallel(
                 phases, snp, prev_snp, graph.snp_reads[snp], threshold, pair_threshold,
                 error, graph.ploidy
             )
-            phases = prune(phases, snp == graph.components[root].nodes[-1])
+            phases = list(prune(phases, snp == graph.components[root].nodes[-1]))
         else:  # specify beginning to remove allele permutations
             allow_allele_permutations = True
         prev_snp = snp
-    return phases[0]
+    A[root_i] = root, phases[0]
 
 
 def phase(
@@ -155,8 +161,8 @@ def phase(
     error: float
 ) -> dict[int, Phase]:
     threshold = log(threshold / (1 - threshold))
-    print(f'Phasing {len(graph.components)} components...')
-    result = dict[int, Phase]()
-    for root in graph.components:
-        result[root] = parallel(graph, root, threshold, pair_threshold, error)
-    return result
+    # print(f'Phasing {len(graph.components)} components...')
+    global A
+    A = array[tuple[int, Phase]](len(graph.components))
+    enumerate(graph.components) ||> parallel(graph, ..., threshold, pair_threshold, error)
+    return {A[i][0]: A[i][1] for i in range(len(graph.components))}

@@ -5,16 +5,18 @@ from bio.bam import *
 from read import SNP, Read
 from graph import Graph
 from rna import Gene, RNAGraph
+import sys
 
 
 QUALITY_CUTOFF = 10
-CHECK_HETEROZYGOUS = True
+ONLY_HETEROZYGOUS = False
 
 
 class VCF:
     snps: list[SNP]
     line_to_snp: dict[int, int]  # 1-based index
     chromosomes: dict[str, tuple[int, int]]  # Chromosome name to the SNP span
+    chr_ordered: list[str]
 
     def find_first(self, chr: str, pos: int) -> int:
         if chr not in self.chromosomes:
@@ -40,7 +42,7 @@ def parse_vcf(vcf_path: str, sample_name: optional[str] = None) -> VCF:
 
     snps = list[SNP]()
     line_to_snp = dict[int, int]()
-    chromosomes = dict[str, tuple[int, int]]()
+    chromosomes, chr_ordered = dict[str, tuple[int, int]](), list[str]()
     with open(vcf_path) as vcf:
         # samples = list(vcf.header.samples)
         # if not samples:
@@ -63,8 +65,8 @@ def parse_vcf(vcf_path: str, sample_name: optional[str] = None) -> VCF:
             potential_alleles = [ref] + alt.split(',')
             # Get only alleles that are specified in GT field
             alleles = [
-                seq(a) 
-                for i, a in enumerate(potential_alleles) 
+                seq(a)
+                for i, a in enumerate(potential_alleles)
                 if str(i) in gt and len(a) == 1
             ]
             if len(alleles) > 1:  # Ignore homozygous SNPs
@@ -73,6 +75,7 @@ def parse_vcf(vcf_path: str, sample_name: optional[str] = None) -> VCF:
                     raise ValueError(f'VCF is not sorted (SNP {snp})')
                 line_to_snp[seen_snps] = len(snps)
                 if chr not in chromosomes:
+                    chr_ordered.append(chr)
                     if prev_chr:
                         chromosomes[prev_chr] = (chromosomes[prev_chr][0], len(snps))
                     chromosomes[chr] = (len(snps), -1)
@@ -80,7 +83,7 @@ def parse_vcf(vcf_path: str, sample_name: optional[str] = None) -> VCF:
                 snps.append(snp)
         if prev_chr:
             chromosomes[prev_chr] = (chromosomes[prev_chr][0], len(snps))
-    return VCF(snps, line_to_snp, chromosomes)
+    return VCF(snps, line_to_snp, chromosomes, chr_ordered)
 
 
 def parse_gtf(gtf_path: str, chroms: dict[str, tuple[int, int]]) -> Gene:
@@ -92,9 +95,11 @@ def parse_gtf(gtf_path: str, chroms: dict[str, tuple[int, int]]) -> Gene:
 
     gi, i = 0, 0
     while i < len(b):
+        # sys.stdout.write(f"\r{i} ... {b[i][0]}:{b[i][2]}")
         if b[i][2] == "transcript":
             chr, interval, sign = b[i][0], (int(b[i][3]) - 1, int(b[i][4])), b[i][6]
             if chr not in chroms:
+                i += 1
                 continue
             info = dict(parse_f(f.strip()) for f in b[i][8].split(";") if f.strip())
             name = info.get("gene_name", info["transcript_id"])
@@ -156,9 +161,6 @@ def parse_read(
                     ref += sz
                 case _:
                     pass
-    # Adding an MP suffix like extractHairs to specify that matepairs are merged
-    # if len(counts) > 1 and counts[0] > 0 and counts[1] > 0: name += "_MP"
-    # Filter out SNPs that harbour mate-pair allele conflicts
     if ignore_conflicts:
         for i in list(cov):
             if len(cov[i]) > 1:
@@ -174,44 +176,49 @@ def parse_read(
 def parse_bam(
     vcf: VCF,
     sam_path: str,
+    r_chr: str,
     threshold: int = 1,
     no_duplicates: bool = True,
-    no_conflicts: bool = True
+    no_conflicts: bool = True,
+    max_insert_size = -1
 ) -> tuple[str, list[tuple[int, int, str]]]:
     """
     Reads a SAM/BAM. Does not have to be sorted.
     """
 
+    # print list(vcf.chromosomes.keys())
+    # sys.exit(0)
+
     seen = dict[str, SAMRecord]()
     seen_chrs = set[str]()
-    with BAM(sam_path) as sam:
+    with BAM(sam_path, r_chr) as sam:
         parse = parse_read(vcf, sam, ..., threshold, no_conflicts)
         for line_i, line in enumerate(sam):
             chr = sam.reference_name(line.tid)
-            if chr not in seen_chrs or line_i % 10000000 == 0:
-                print (
-                    f'Parsing {chr}; '
-                    + f'{len(seen)} cached so far; '
-                    + f'{line_i} processed so far...'
-                )
+            if chr != r_chr: break
             seen_chrs.add(chr)
             name = line.query_name
             if len(name) > 2 and name[-2] in '#/':
                 name = name[:-2]
             if (
-                line.supplementary
+                (line.supplementary or line.secondary)
                 or (no_duplicates and line.duplicate)
                 or chr != sam.reference_name(line.mate_tid)
                 or line.unmapped
                 or not len(line.cigar)
                 or chr not in vcf.chromosomes
             ):
-                if not line.supplementary and not line.mate_unmapped and name in seen:
+                if not (line.supplementary or line.secondary) \
+                   and not line.mate_unmapped and name in seen:
                     yield from parse([seen[name]])
                     del seen[name]
                 continue
             elif name in seen:
-                yield from parse([seen[name], line])
+                if max_insert_size > -1 and seen[name].insert_size > max_insert_size:
+                    yield from parse([seen[name]])
+                    yield from parse([line])
+                else:
+                    yield from parse([seen[name], line])
                 del seen[name]
             else:
                 seen[name] = line
@@ -232,7 +239,7 @@ def parse_fragmat(
     with open(fragmat) as f:
         for r in f:
             frag = r.split()
-            if not frag[0].isdigit(): 
+            if not frag[0].isdigit():
                 ValueError(f'{fragmat} is not valid fragmat file')
             name, qual, frag = frag[1], frag[-1], frag[2:-1]
             if len(frag) % 2 == 1:
@@ -244,10 +251,10 @@ def parse_fragmat(
             for i in range(0, len(frag), 2):
                 idx = int(frag[i])
                 for allele in frag[i + 1]:
-                    if idx not in vcf.line_to_snp:
+                    if 0 <= idx < len(vcf.snps):
                         print(f'Warning: Invalid SNP index {idx} for read {name}')
                         continue
-                    snp = vcf.snps[vcf.line_to_snp[idx]]
+                    snp = vcf.snps[idx] # vcf.line_to_snp[idx]]
                     if not 0 <= int(allele) < len(snp.alleles):
                         raise ValueError(f'Invalid allele {allele} for SNP {snp}')
                     alleles.append((snp.id, int(allele), qual[len(alleles)]))
@@ -257,33 +264,47 @@ def parse_fragmat(
 
 def parse_phases(
     vcf: VCF,
-    paths: list[str],
+    paths: list[tuple[str, int]],
+    r_chr: str,
     skip_single: bool = True
 ) -> Read:
     reads = list[list[tuple[int, int, str]]]()
-    for path in paths:
-        print(f'Parsing {path}...')
+
+    for path, max_insert_size in paths:
+        # print(f'Parsing {path}...')
+        # ff = open(f'{path}_{Z}.hx-fragmat', 'w')
         _, ext = splitext(path)
-        it = (
-            parse_bam(vcf, path, 1) 
-            if ext in ['.sam', '.bam', '.cram'] 
-            else parse_fragmat(vcf, path)
-        )
+        # it = (
+        #     parse_bam(vcf, path, 1)
+        #     if ext in ['.sam', '.bam', '.cram']
+        #     else parse_fragmat(vcf, path)
+        # )
+        # for name, alleles in it:
+        #     ff.write(f'_ {name} ')
+        #     qs = ""
+        #     for id, a, q in alleles:
+        #         ff.write(f'{id} {a} ')
+        #         qs += q
+        #     ff.write(f'{qs}\n')
+        # ff.close()
+        # continue
         coverages = dict[int, set[int]]()
         path_reads = list[list[tuple[int, int, str]]]()
-        for name, alleles in it:
-            if not (skip_single and len(alleles) <= 1):
-                for pos, al, _ in alleles:
-                    coverages.setdefault(pos, set[int]()).add(al)
-                path_reads.append(alleles)
+        for name, alleles in parse_bam(vcf, path, r_chr, max_insert_size=max_insert_size):
+            for pos, al, _ in alleles:
+                coverages.setdefault(pos, set[int]()).add(al)
+            path_reads.append(alleles)
         # Ensure that all reads have expressed SNPs
-        if CHECK_HETEROZYGOUS:
-            for read in path_reads:
-                read = [i for i in read if i[0] in coverages and len(coverages[i[0]]) >= 2]
-                if len(read) and not (skip_single and len(read) <= 1):
-                    reads.append(read)
-    print(f"{len(reads)} reads of sufficient quality")
-
+        for read in path_reads:
+            read = [
+                i for i in read
+                if i[0] in coverages and (not ONLY_HETEROZYGOUS or len(coverages[i[0]]) >= 2)
+            ]
+            if len(read) and not (skip_single and len(read) <= 1):
+                reads.append(read)
+    print(f"{len(reads)} reads of sufficient quality in {r_chr}")
+    # sys.exit(0)
+    
     read_counter = dict[list[tuple[int, int]], int]()
     for r in reads:
         key = sorted((s, a) for s, a, _ in r)
@@ -293,54 +314,45 @@ def parse_phases(
             read_counter[key] = 1
         else:
             read_counter[key] += 1
-    print(f"{len(read_counter)} distinct reads")
+    # print(f"{len(read_counter)} distinct reads")
 
-    for i, t in enumerate(read_counter.items()):
+    for i, t in enumerate(read_counter.items()): 
         yield Read({snp_id: snp_a for snp_id, snp_a in t[0]}, t[1], i)
-
 
 def load_rna_data(
     vcf: VCF,
-    gtf_path: str,
+    r_chr: str,
+    genes: list[Gene],
     paths: list[str],
-    isoforms_path: str
-) -> RNAGraph:
-    print(f"Loading GTF {gtf_path}...")
-    genes = list(parse_gtf(gtf_path, vcf.chromosomes))
-    print(f"{len(genes)} genes in GTF file")
+    isoforms_path: str,
+    args: list[float]
+):
+    reads = list(parse_phases(vcf, [(p, -1) for p in paths], r_chr, skip_single=False))
+    return reads
+    # if isoforms_path:
+    #     print("Building IsoDict...")
+    #     raise NotImplementedError("IsoDict")
+    #     #isodict = build_isodict(isoforms_path)
+    #     #genes = filter_transcripts(genes, isodict)
 
-    reads = list(parse_phases(vcf, paths, skip_single=False))
-    if isoforms_path:
-        print("Building IsoDict...")
-        raise NotImplementedError("IsoDict")
-        #isodict = build_isodict(isoforms_path)
-        #genes = filter_transcripts(genes, isodict)
-
-    return RNAGraph(
-        vcf.snps, 
-        genes, 
-        reads,
-        size_factor = 2,
-        rate_factor = 0.2,
-        rate_cutoff = 0.6,
-        coverage_cutoff = 0,
-        rate_dep_cutoff = 2,
-        cutoff = 0.001,
-        conf = 0.2
-    )
+    # # print('Building RNA graph...')
+    # rna = RNAGraph(vcf.snps, [g for g in genes if g.chr == r_chr], reads, args)
+    # return rna
 
 
 def load_dna_data(
     vcf: VCF,
-    paths: list[str],
+    r_chr: str,
+    paths: list[tuple[str, int]],
     ploidy: int = 2,
     rna_reads: optional[list[Read]] = None
-) -> Graph:
-    reads = list(parse_phases(vcf, paths, skip_single=True))
-    if rna_reads:
-        reads += ~rna_reads
-    for r in reads:
-        r.special_snp = sorted(r.snps)[1]
-        r.rates = [0.5] * ploidy
+):
+    reads = list(parse_phases(vcf, paths, r_chr, skip_single=True))
+    return reads
+    # if rna_reads:
+    #     reads += ~rna_reads
+    # for r in reads:
+    #     r.special_snp = sorted(r.snps)[1]
+    #     r.rates = [0.5] * ploidy
 
-    return Graph(reads, ploidy)
+    # return Graph(reads, ploidy)

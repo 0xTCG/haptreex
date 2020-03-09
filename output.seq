@@ -17,27 +17,28 @@ def mec_score(ploidy: int, reads: list[Read], phase: Phase) -> int:
     )
 
 
-def make_solution(V: VCF, G: Graph, phases: dict[int, Phase], path: str):
+def make_solution(V: VCF, chr_phases: list[tuple[Graph, dict[int, Phase]]], path: str):
     with open(path, "w") as f:
-        for root in sorted(G.components.keys()):
-            comp = G.components[root]
-            span = V.snps[comp.nodes[-1]].pos - V.snps[comp.nodes[0]].pos
-            mec = mec_score(G.ploidy, comp.reads, phases[root])
-            reads = sum(len(x) for x in comp.reads)
-            # span = mec = reads = "##"  # For debugging purposes
-            f.write(
-                f"BLOCK "
-                f"Start: {root + 1} "
-                f"Len: {len(comp.nodes)} "
-                f"Phased: {len(comp.nodes)} "
-                f"Span: {span} "
-                f"MEC: {mec} "
-                f"Reads: {reads}\n"
-            )
-            haps = sorted([(h[root], i) for i, h in enumerate(phases[root].haplotypes)])
-            for snp in comp.nodes:
-                f.write(f"{snp + 1}\t")
-                for _, hap in haps:
-                    f.write(f"{phases[root].haplotypes[hap][snp]}\t")
-                f.write(f"{V.snps[snp].chr}\t{V.snps[snp].pos + 1}\t\n")
-            f.write("*****\n")
+        for G, phases in chr_phases:
+            for root in sorted(G.components.keys()):
+                comp = G.components[root]
+                span = V.snps[comp.nodes[-1]].pos - V.snps[comp.nodes[0]].pos
+                mec = mec_score(G.ploidy, comp.reads, phases[root])
+                reads = sum(len(x) for x in comp.reads)
+                # span = mec = reads = "##"  # For debugging purposes
+                f.write(
+                    f"BLOCK "
+                    f"Start: {root + 1} "
+                    f"Len: {len(comp.nodes)} "
+                    f"Phased: {len(comp.nodes)} "
+                    f"Span: {span} "
+                    f"MEC: {mec} "
+                    f"Reads: {reads}\n"
+                )
+                haps = sorted([(h[root], i) for i, h in enumerate(phases[root].haplotypes)])
+                for snp in comp.nodes:
+                    f.write(f"{snp + 1}\t")
+                    for _, hap in haps:
+                        f.write(f"{phases[root].haplotypes[hap][snp]}\t")
+                    f.write(f"{V.snps[snp].chr}\t{V.snps[snp].pos + 1}\t\n")
+                f.write("*****\n")

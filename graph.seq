@@ -61,6 +61,9 @@ class Graph:
     component_index: dict[int, int]
     snp_reads: dict[int, list[Read]]  # Reads for each SNP
 
+    def __init__(self: Graph):
+        pass
+
     def __init__(
         self: Graph,
         reads: list[Read],
@@ -70,7 +73,7 @@ class Graph:
         self.ploidy = ploidy
 
         self.snps = sorted({s for r in reads for s in r.snps})
-        print(f"{len(self.snps)} SNPs in non-trivial connected components")
+        # print(f"{len(self.snps)} SNPs in non-trivial connected components")
         adj = {i: set[int]() for i in self.snps}  # SNP -> adj. SNPs
         for r in reads:
             for i in r.snps:

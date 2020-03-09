@@ -6,8 +6,9 @@ from read import Read, SNP
 from rates import find_rates, score
 
 
-DASE_SKIP_MULTI_READS = False
+DASE_ALL_READS = False
 
+import time
 
 class Gene:
     id: int  # index
@@ -80,24 +81,24 @@ class RNAGraph:
         snps: list[SNP],
         genes: list[Gene],
         reads: list[Read],
-        size_factor: int,
-        rate_factor: float,
-        rate_cutoff: float,
-        coverage_cutoff: int,
-        rate_dep_cutoff: int,
-        cutoff: float,
-        conf: float,
+        args: list[float]
     ):
         self.ploidy = 2
         self.multi_reads = [r for r in reads if len(r.snps) > 1]
 
+        # print 'args',len(args)
+        ( size_factor, rate_factor, rate_cutoff,
+          coverage_cutoff, rate_dep_cutoff, cutoff, conf ) = args
+
+        _t=time.time()
+        # print 'in1', time.time()-_t
         # Initialize gene nodes
         # (1) Initialize gene SNPs
         phasable_positions = dict[str, list[tuple[int, int]]]()
         # Add `if len(r.snps) >= 1` to the set below to enable the original behaviour
         snp_candidates = {
             k for r in reads for k in r.snps 
-            if not DASE_SKIP_MULTI_READS or len(r.snps) >= 1
+            if DASE_ALL_READS or len(r.snps) == 1
         }
         for s in snp_candidates:
             snp = snps[s]
@@ -108,6 +109,8 @@ class RNAGraph:
         for g in genes:
             if g.chr in phasable_positions:
                 g.set_snps(phasable_positions[g.chr])
+
+        # print 'in2', time.time()-_t
         # (2) Initialize gene neighbours (genes that share a common SNP)
         snp_to_genes = dict[int, set[int]]()  # SNP to gene
         for gi, g in enumerate(genes):
@@ -118,10 +121,13 @@ class RNAGraph:
                 for n in snp_to_genes[snp]:
                     g.neighbors.add(n)
 
+        # print 'in3', time.time()-_t
+        # print len(genes)
         # Build gene components from genes that have at least one SNP
         gene_components, _ = build_components(
             dict((i, g) for i, g in enumerate(genes) if g.snps)
         )
+        # print 'in3a', time.time()-_t
         snp_to_comp = {  # SNP -> genic component
             snp: root
             for root, comp in gene_components.items()
@@ -137,6 +143,8 @@ class RNAGraph:
             if len(snps) > 1:
                 snps.sort()
                 comp_snps[snps[0]] = sorted(snps)
+        
+        # print 'in4', time.time()-_t
         # Only use reads that fall strictly within a gene
         comp_to_reads = {root: list[Read]() for root in gene_components}
         NOTSEEN = -1  # NOTSEEN span non-exonic regions
@@ -163,7 +171,9 @@ class RNAGraph:
             # Ignore SNPs that are not expressed by reads that survived till here
             comp_snps[root] = [s for s in snps if s in self.snp_reads]
             # print(f'SNP {snp} not expressed in reads!')
-        
+        comp_snps = {root: snps for root, snps in comp_snps.items() if snps}
+
+        # print 'in5', time.time()-_t
         # Calculate counts and LL for filtering
         self.counts = dict[int, list[int]]()
         for snp in self.snp_reads:
@@ -172,6 +182,7 @@ class RNAGraph:
                 self.counts[snp][read.snps[snp] % 2] += read.count
         LL = {s: score(self.counts[s]) for ss in comp_snps.values() for s in ss}
 
+        # print 'in6', time.time()-_t
         # Assign DASE rates
         self.rates = dict[int, list[float]]()
         for snps in comp_snps.values():
@@ -182,24 +193,25 @@ class RNAGraph:
             for read in reads:
                 read.rates = rate
 
+        # print 'in7', time.time()-_t
         def num(ss):
             return len(ss), sum(len(s) for _, s in ss.items())
 
         # Apply filters
-        print(f"[start] size: {num(comp_snps)}")
+        # print(f"[start] size: {num(comp_snps)}")
 
         comp_snps = self.rate_filter(comp_snps, rate_cutoff)
-        print(f"[rate] size: {num(comp_snps)}")
-        comp_snps = self.coverage_filter(comp_snps, coverage_cutoff)
-        print(f"[coverage] size: {num(comp_snps)}")
-        comp_snps = self.size_cluster_filter(comp_snps, size_factor)
-        print(f"[size_cluster] size: {num(comp_snps)}")
-        comp_snps = self.rate_dependent_filter(comp_snps, rate_dep_cutoff, conf)
-        print(f"[rate_dependent] size: {num(comp_snps)}")
+        # print(f"[rate] size: {num(comp_snps)}")
+        comp_snps = self.coverage_filter(comp_snps, int(coverage_cutoff))
+        # print(f"[coverage] size: {num(comp_snps)}")
+        comp_snps = self.size_cluster_filter(comp_snps, int(size_factor))
+        # print(f"[size_cluster] size: {num(comp_snps)}")
+        comp_snps = self.rate_dependent_filter(comp_snps, int(rate_dep_cutoff), conf)
+        # print(f"[rate_dependent] size: {num(comp_snps)}")
         comp_snps = self.cutoff_filter(comp_snps, LL, cutoff)
-        print(f"[cutoff] size: {num(comp_snps)}")
+        # print(f"[cutoff] size: {num(comp_snps)}")
         comp_snps = self.rate_cluster_filter(comp_snps, rate_factor)
-        print(f"[rate_cluster] size: {num(comp_snps)}")
+        # print(f"[rate_cluster] size: {num(comp_snps)}")
 
         # Make SNP connected components
         self.components, self.component_index = dict[int, Component](), dict[int, int]()
@@ -211,7 +223,7 @@ class RNAGraph:
 
     def rate_filter(self: RNAGraph, snps: dict[int, list[int]], rate_cutoff: float):
         # High-confidence SNPs
-        return {r: s for r, s in snps.items() if max(self.rates[r]) >= rate_cutoff}
+        return {r: s for r, s in snps.items() if self.rates[r] and max(self.rates[r]) >= rate_cutoff}
 
     def coverage_filter(self: RNAGraph, snps: dict[int, list[int]], coverage_cutoff: int):
         new = dict[int, list[int]]()
@@ -228,6 +240,7 @@ class RNAGraph:
             min(cluster): sorted(cluster)
             for r in snps
             for cluster in self.clusters_size(snps[r], size_factor)
+            if cluster
         }
 
     def rate_dependent_filter(self: RNAGraph, snps: dict[int, list[int]], cutoff: int, conf: float):
@@ -256,7 +269,7 @@ class RNAGraph:
             min(cluster): sorted(cluster)
             for r in snps
             for cluster in self.clusters_rate(snps[r], rate_factor)
-            if len(cluster) > 0
+            if cluster
         }
 
     def clusters_size(self: RNAGraph, snps: list[int], sum_factor: int):
@@ -278,7 +291,10 @@ class RNAGraph:
     def clusters_rate(self: RNAGraph, snps: list[int], rate_factor: float):
         def sort_key(a: tuple[int, float]) -> float:
             return a[1]
-        tmp = {s: max(self.counts[s]) / float(sum(self.counts[s])) - 0.5 for s in snps}
+        tmp = {
+            s: max(self.counts[s]) / float(sum(self.counts[s])) - 0.5 
+            for s in snps if self.counts[s]
+        }
         order = sorted(tmp.items(), key=sort_key)
 
         clusters = [[order[0][0]]]
