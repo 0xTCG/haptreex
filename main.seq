@@ -8,6 +8,7 @@ import graph
 import alg
 import output
 import rna
+import threading
 from rna import Gene
 from graph import Graph
 from alg import Phase
@@ -42,10 +43,11 @@ def parse_args(argv: list[str]):
                 "phase-threshold",
                 "pair-threshold",
                 "phase-error",
-                "z="
+                "z=",
+                "10x"
             ]
         )
-        vcf, dna, rna, gene, isoforms, output = "", "", "", "", "", ""
+        vcf, dna, rna, gene, isoforms, output, tenx = "", "", "", "", "", "", False
         for o, a in opts:
             if o in ["-h", "--help"]: sys.exit(0)
             elif o in ['-v', '--vcf']: vcf = a
@@ -57,44 +59,37 @@ def parse_args(argv: list[str]):
             elif o in ['-o', '--out']: output = a
             elif o in ['-d', '--only-dase']: DASE_ONLY = True
             elif o in ['-p', '--ploidy']: ploidy = int(a)
+            elif o in ['--10x']: tenx = True
             elif o == "--phase-threshold": PHASE_THRESHOLD = float(a)
             elif o == "--pair-threshold": PAIR_THRESHOLD = float(a)
             elif o == "--phase-error": PHASE_ERROR = float(a)
             else: assert False, f"unhandled option {o}"
-        return vcf, dna, rna, gene, output, isoforms
+        return vcf, dna, rna, gene, output, isoforms, tenx
     except GetoptError as err:
         raise ValueError(err.message)
 
-A = array[tuple[Graph, dict[int, Phase]]](100)
-def parse_chromosome(chri, vcf, dna, rna, genes, isoforms):
-    global A, RNA_PARAMS
-    chr_i, chr = chri
-    r_ = files.load_rna_data(vcf, chr, genes, [rna], isoforms, RNA_PARAMS)
-    g_ = files.load_dna_data(vcf, chr, [(dna, 1000)], PLOIDY)
-    return
-
-    # g: graph.Graph = None
-    # if not genes or rna == "":
-    #     dnas = list[tuple[str, int]]()
-    #     if dna: dnas.append((dna, 1000)) 
-    #     if rna: dnas.append((rna, -1))
-    #     g = files.load_dna_data(vcf, chr, dnas, PLOIDY)
-    # else:
-    #     r = files.load_rna_data(vcf, chr, genes, [rna], isoforms, RNA_PARAMS)
-    #     if not dna:
-    #         g = graph.Graph(r.multi_reads if not DASE_ONLY else list[read.Read](), r.ploidy)
-    #     else:
-    #         g = files.load_dna_data(vcf, chr, [(dna, 1000)], PLOIDY, r.multi_reads)
-    #     g.integrate_rna(r)
-    # phases = alg.phase(g, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
-    # A[chr_i] = g, phases    
+def parse_chromosome(chr, vcf, dna, rna, genes, isoforms, tenx) -> tuple[Graph, dict[int, Phase]]:
+    g: graph.Graph = None
+    if not genes or rna == "":
+        dnas = list[tuple[str, int]]()
+        if dna: dnas.append((dna, 1000)) 
+        if rna: dnas.append((rna, -1))
+        g = files.load_dna_data(vcf, chr, dnas, PLOIDY, tenx=tenx)
+    else:
+        r = files.load_rna_data(vcf, chr, genes, [rna], isoforms, RNA_PARAMS)
+        if not dna:
+            g = graph.Graph(r.multi_reads if not DASE_ONLY else list[read.Read](), r.ploidy)
+        else:
+            g = files.load_dna_data(vcf, chr, [(dna, 1000)], PLOIDY, r.multi_reads, tenx)
+        g.integrate_rna(r)
+    phases = alg.phase(g, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
+    return g, phases
 
 def main(argv: list[str]):
-    global A
     print('HapTree-X v2.0 [with Seq v0.9]')
     random.seed(51)
 
-    vcf_path, dna, rna, gtf, out, isoforms = parse_args(argv)
+    vcf_path, dna, rna, gtf, out, isoforms, tenx = parse_args(argv)
 
     print(f"Loading VCF file {vcf_path}...")
     if not vcf_path:
@@ -117,10 +112,18 @@ def main(argv: list[str]):
     elif PLOIDY != 2:
         raise ValueError('DASE-based phasing works only for diploid genomes')
     
-    A = array[tuple[Graph, dict[int, Phase]]](len(vcf.chr_ordered))
-    enumerate(vcf.chr_ordered) ||> parse_chromosome(vcf, dna, rna, genes, isoforms)
-    # output.make_solution(vcf, [A[0]], out)
-    output.make_solution(vcf, list(A, len(vcf.chr_ordered)), out)
+    # result = list[tuple[str, tuple[Graph, dict[int, Phase]]]]()
+    lock = threading.Lock()
+    # vcf.chr_ordered = ['chr7_gl000195_random']
+    with open(out, "w") as f:
+        ( iter(vcf.chr_ordered) 
+            ||> parse_chromosome(vcf, dna, rna, genes, isoforms, tenx) 
+             |> output.make_solution(vcf, f, lock) )
+            # |>  result.lock_append(lock) )
+    # r = dict(result)
+    #     for c in vcf.chr_ordered:
+    #         g, p = r[c]
+    #         output.make_solution(vcf, g, p, f)
     print(f'HapTree-X done--- the results can be found in {out}')
 
 try:
