@@ -5,7 +5,11 @@ from bio.bam import *
 from read import SNP, Read
 from graph import Graph
 from rna import Gene, RNAGraph
+from time import timing, time
 import sys
+
+# HTx cytosol:
+# 7:56 # 7:47
 
 
 QUALITY_CUTOFF = 10
@@ -57,6 +61,7 @@ def parse_vcf(vcf_path: str, sample_name: optional[str] = None) -> VCF:
                 continue
             seen_snps += 1
             chr, pos, id, ref, alt, _, _, _, fmt_, sample = line.split('\t')
+            if chr != 'chr1': break
             if len(ref) != 1:  # Ignore indels
                 continue
             # We only deal with SNPs here for now
@@ -115,15 +120,18 @@ def parse_gtf(gtf_path: str, chroms: dict[str, tuple[int, int]]) -> Gene:
         else:
             i += 1
 
-
+_V=0.0
 def parse_read(
     vcf: VCF,
-    handle: BAM,
+    handle: BAMReader,
     lines: list[SAMRecord],
+    _cov: dict[int, set[int]],
+    reads: list[list[tuple[int, int, str]]],
+
     threshold: int,
     ignore_conflicts: bool,
     is_tenx: bool
-) -> tuple[tuple[str, int], list[tuple[int, int, str]]]:
+) : #-> tuple[tuple[str, int], list[tuple[int, int, str]]]:
     """
     If reads are valid and pass the threshold filter, yields the
         (read_name, [all_1, all_2, ...])
@@ -133,16 +141,19 @@ def parse_read(
         ('read1', [(SNP("chr1", 12), 'A', 'E'), ...])
     """
 
+    global _V
     cov = dict[int, dict[int, list[str]]]()  # SNP: {allele: [qual1, qual2, ...]}
     name = lines[0].query_name
     counts = [0] * len(lines)
     for line_i, sam in enumerate(lines):
-        chr = handle.reference_name(sam.tid)
+        chr = handle.contig(sam.tid).name
         read, ref = 0, 0
         for sz, op in sam.cigar:
             match op:
                 case 'M' or '=' or 'X':
+                    _t=time()
                     start = vcf.find_first(chr, sam.pos + ref)
+                    _V+=time()-_t
                     for i in range(start, vcf.chromosomes[chr][1]):
                         snp = vcf.snps[i]
                         if snp.pos >= sam.pos + ref + sz:
@@ -150,7 +161,7 @@ def parse_read(
                         t = snp.pos - sam.pos - ref + read
                         if sam.read[t] in snp.alleles:
                             allele = snp.alleles.index(sam.read[t])
-                            qual = sam.qual[t] if sam.qual != '*' else '.'
+                            qual = '.' # sam.qual[t] if sam.qual != '*' else '.'
                             aq = cov.setdefault(i, dict[int, list[str]]())
                             aq.setdefault(allele, list[str]()).append(qual)
                             counts[line_i] += 1
@@ -162,6 +173,7 @@ def parse_read(
                     ref += sz
                 case _:
                     pass
+        # sam.destroy()
     if ignore_conflicts:
         for i in list(cov):
             if len(cov[i]) > 1:
@@ -174,29 +186,34 @@ def parse_read(
                 lines[0].aux('MI')
             if BX and not XC:
                 raise ValueError("BX read lacks MI or XC tag")
-            yield ((str(BX) if BX else ""), (XC.i if XC else -1)), [
-                (sid, a, max(q))
-                for sid, A in cov.items()
-                for a, q in A.items()
-            ]
+            # yield ((str(BX) if BX else ""), (XC.i if XC else -1)), [
+            #     (sid, a, max(q))
+            #     for sid, A in cov.items()
+            #     for a, q in A.items()
+            # ]
         else:
-            yield ("", -1), [
+            for pos, A in cov.items():
+                for al, _ in A.items():
+                    _cov.setdefault(pos, set[int]()).add(al)
+            reads.append([
                 (sid, a, max(q))
                 for sid, A in cov.items()
                 for a, q in A.items()
-            ]
+            ])
 
 
 def parse_bam(
     vcf: VCF,
     sam_path: str,
     r_chr: str,
+    cov: dict[int, set[int]],
+    reads: list[list[tuple[int, int, str]]],
     threshold: int = 1,
     no_duplicates: bool = True,
     no_conflicts: bool = True,
     max_insert_size = -1,
     is_tenx: bool = False
-) -> tuple[tuple[str, int], list[tuple[int, int, str]]]:
+) : #-> tuple[tuple[str, int], list[tuple[int, int, str]]]:
     """
     Reads a SAM/BAM. Does not have to be sorted.
     """
@@ -206,9 +223,9 @@ def parse_bam(
 
     seen = dict[str, SAMRecord]()
     with BAM(sam_path, r_chr) as sam:
-        parse = parse_read(vcf, sam, ..., threshold, no_conflicts, is_tenx)
+        parse = parse_read(vcf, sam, ..., cov, reads, threshold, no_conflicts, is_tenx)
         for line_i, line in enumerate(sam):
-            chr = sam.reference_name(line.tid)
+            chr = sam.contig(line.tid).name
             if chr != r_chr: break
             name = line.query_name
             if len(name) > 2 and name[-2] in '#/':
@@ -216,27 +233,28 @@ def parse_bam(
             if (
                 (line.supplementary or line.secondary)
                 or (no_duplicates and line.duplicate)
-                or chr != sam.reference_name(line.mate_tid)
+                or chr != sam.contig(line.mate_tid).name
                 or line.unmapped
                 or not len(line.cigar)
                 or chr not in vcf.chromosomes
             ):
                 if not (line.supplementary or line.secondary) \
                    and not line.mate_unmapped and name in seen:
-                    yield from parse([seen[name]])
+                    parse([seen[name]])
                     del seen[name]
+                # line.destroy()
                 continue
             elif name in seen:
                 if max_insert_size > -1 and seen[name].insert_size > max_insert_size:
-                    yield from parse([seen[name]])
-                    yield from parse([line])
+                    parse([seen[name]])
+                    parse([line])
                 else:
-                    yield from parse([seen[name], line])
+                    parse([seen[name], line])
                 del seen[name]
             else:
                 seen[name] = line
         for line in seen.values():
-            yield from parse([line])
+            parse([line])
 
 
 def parse_phases(
@@ -247,33 +265,33 @@ def parse_phases(
     is_tenx: bool = False
 ) -> Read:
     print 'Reading', r_chr, is_tenx
+    y=time()
+    _z=0.0
     reads = list[list[tuple[int, int, str]]]()
     for path, max_insert_size in paths:
         _, ext = splitext(path)
         coverages = dict[int, set[int]]()
         if is_tenx:
             d = dict[tuple[str, int], dict[int, dict[int, str]]]()
-            for tag, alleles in parse_bam(vcf, path, r_chr, max_insert_size=max_insert_size, is_tenx=True):
-                for pos, al, _ in alleles:
-                    coverages.setdefault(pos, set[int]()).add(al)
-                if tag[0] == "":
-                    reads.append(alleles)
-                else:
-                    l = d.setdefault(tag, dict[int, dict[int, str]]())
-                    for pos, al, q in alleles:
-                        l.setdefault(pos, dict[int, str]())[al] = q
-            for r in d.values():
-                rx = list[tuple[int, int, str]]()
-                for pos, all in r.items():
-                    if len(all) == 1:
-                        for a, q in all.items():
-                            rx.append((pos, a, q))
-                if rx: reads.append(rx)
+            # for tag, alleles in parse_bam(vcf, path, r_chr, max_insert_size=max_insert_size, is_tenx=True):
+            #     for pos, al, _ in alleles:
+            #         coverages.setdefault(pos, set[int]()).add(al)
+            #     if tag[0] == "":
+            #         reads.append(alleles)
+            #     else:
+            #         l = d.setdefault(tag, dict[int, dict[int, str]]())
+            #         for pos, al, q in alleles:
+            #             l.setdefault(pos, dict[int, str]())[al] = q
+            # for r in d.values():
+            #     rx = list[tuple[int, int, str]]()
+            #     for pos, all in r.items():
+            #         if len(all) == 1:
+            #             for a, q in all.items():
+            #                 rx.append((pos, a, q))
+            #     if rx: reads.append(rx)
         else:
-            for _, alleles in parse_bam(vcf, path, r_chr, max_insert_size=max_insert_size):
-                for pos, al, _ in alleles:
-                    coverages.setdefault(pos, set[int]()).add(al)
-                reads.append(alleles)
+            parse_bam(vcf, path, r_chr, coverages, reads, max_insert_size=max_insert_size)
+        _z=time()
         # Ensure that all reads have expressed SNPs
         for read_i, read in enumerate(reads):
             read = [
@@ -284,6 +302,11 @@ def parse_phases(
                 reads[read_i] = read 
             else:
                 reads[read_i].clear()
+        _z=time()-_z
+    print 'time', time()-y
+    print 'vcf time', _V
+    print 'ensure time', _z
+    sys.exit(0)
     
     read_counter = dict[list[tuple[int, int]], int]()
     for r in reads:

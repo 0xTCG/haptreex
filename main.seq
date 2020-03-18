@@ -13,6 +13,8 @@ from rna import Gene
 from graph import Graph
 from alg import Phase
 
+from time import timing, time
+
 DASE_ONLY = False
 PLOIDY = 2
 
@@ -114,7 +116,7 @@ def main(argv: list[str]):
     
     # result = list[tuple[str, tuple[Graph, dict[int, Phase]]]]()
     lock = threading.Lock()
-    # vcf.chr_ordered = ['chr7_gl000195_random']
+    vcf.chr_ordered = ['chr1']
     with open(out, "w") as f:
         ( iter(vcf.chr_ordered) 
             ||> parse_chromosome(vcf, dna, rna, genes, isoforms, tenx) 
