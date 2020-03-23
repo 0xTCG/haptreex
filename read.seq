@@ -40,7 +40,11 @@ class Read:
         return len(self.snps)
 
     def __str__(self: Read):
-        return f'Read.{self.snps}'
+        r = list[str]()
+        for s in sorted(self.snps):
+            r.append(f'{s}: {self.snps[s]}')
+        return f'Read.({", ".join(r)}; {self.count})'
+        # return f'Read.{sorted(self.snps.enumerate())}'
 
 
 def sample_from_reads(reads: list[Read]) -> list[Read]:

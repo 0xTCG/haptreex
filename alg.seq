@@ -8,7 +8,7 @@ from graph import Graph
 import threading
 
 CONFIDENCE = 0.5
-
+MAX_PHASES = 20000
 
 # haplotypes: (SNP ID -> Allele) dict for each haplotype
 type Phase(haplotypes: list[dict[int, int]], score: float)
@@ -24,7 +24,7 @@ def read_val_tail(
 ) -> float:
     """
     we extend a phasing and then calculating how likely that extension is
-    this looks at the prob of a particular phasing generating the Set of reads
+    this looks at the prob of a particular phasing generating the set of reads
     which cover "end" ( = "last_snp") and for which "end" is not the smallest SNP
     in the read (relevant reads for the extension).
     this log prob gets added to the log prob of the non-extended phasing.
@@ -100,8 +100,11 @@ def branch(
     return new_phases
 
 
-def prune(phases: list[Phase], is_last: bool):
-    if not phases: return
+# _x_xc2,38984,569,1.4595731582187563,38980,4,1.4597229348383787,34866494
+def prune(phases: list[Phase], is_last: bool) -> list[Phase]:
+    if not phases: 
+        return list[Phase]()
+
     # prune solutions based on number of solutions and thresholds
     threshold = 1.0
     if is_last:
@@ -117,16 +120,19 @@ def prune(phases: list[Phase], is_last: bool):
     threshold = abs(log(threshold)) + 0.0001
 
     min_val = min(p.score for p in phases)
-    # nphases = [p for p in phases if abs(p.score - min_val) < threshold]
-    # if is_last:
-    #     nphases = [choice(nphases)]
-    # return nphases
-    max_items = 1 if is_last else 2000
-    i = 0
-    for p in phases:
-        if abs(p.score - min_val) < threshold and i < max_items:
-            yield p
-            i += 1
+    max_items = 1 if is_last else MAX_PHASES
+    scores = sorted([(abs(p.score - min_val), pi) for pi, p in enumerate(phases)])
+    return [phases[pi] for score, pi in scores[:max_items] if score < threshold]
+
+    # for p in sorted(phases, key=sf(..., min_val))[:max_items]:
+    #     if abs(p.score - min_val) >= threshold:
+    #         break
+    #     yield p
+    # i = 0
+    # for p in phases:
+    #     if abs(p.score - min_val) < threshold and i < max_items:
+    #         yield p
+    #         i += 1
 
 def parallel(
     graph: Graph,
@@ -147,7 +153,7 @@ def parallel(
                 phases, snp, prev_snp, graph.snp_reads[snp], threshold, pair_threshold,
                 error, graph.ploidy
             )
-            phases = list(prune(phases, snp == graph.components[root].nodes[-1]))
+            phases = prune(phases, snp == graph.components[root].nodes[-1])
         else:  # specify beginning to remove allele permutations
             allow_allele_permutations = True
         prev_snp = snp

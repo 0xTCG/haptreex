@@ -49,4 +49,3 @@ def make_solution(Gp: tuple[Graph, dict[int, Phase]], V: VCF, f: File, lock: Loc
                     f.write(f"{phases[root].haplotypes[hap][snp]}\t")
                 f.write(f"{V.snps[snp].chr}\t{V.snps[snp].pos + 1}\t\n")
             f.write("*****\n")
-        print f'done with {chr}, {b} blocks written'

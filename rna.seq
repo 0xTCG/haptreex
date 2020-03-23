@@ -64,6 +64,35 @@ class Gene:
                 else:
                     exon += 1
 
+    def from_gtf(gtf_path: str, chroms: dict[str, tuple[int, int]]) -> Gene:
+        b = [a.split("\t") for a in open(gtf_path, "r") if a[0] != '#']
+
+        def parse_f(f):
+            x, y = f.split(" ", 1)
+            return x, y[1:-1] if y[0] == y[-1] == '"' else y
+
+        gi, i = 0, 0
+        while i < len(b):
+            if b[i][2] == "transcript":
+                chr, interval, sign = b[i][0], (int(b[i][3]) - 1, int(b[i][4])), b[i][6]
+                if chr not in chroms:
+                    i += 1
+                    continue
+                info = dict(parse_f(f.strip()) for f in b[i][8].split(";") if f.strip())
+                name = info.get("gene_name", info["transcript_id"])
+                i += 1
+                exons = list[tuple[int, int]]()
+                while i < len(b) and b[i][2] != "transcript":
+                    if b[i][2] == "exon":
+                        exon_start, exon_end = int(b[i][3]) - 1, int(b[i][4])
+                        exons.append((exon_start, exon_end))
+                    i += 1
+                yield Gene(gi, name, chr, interval, sign, exons)
+                gi += 1
+            else:
+                i += 1
+
+
 
 class RNAGraph:
     genes: list[Gene]
