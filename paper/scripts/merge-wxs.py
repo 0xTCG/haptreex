@@ -49,7 +49,6 @@ CC=['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '
 def ff(x):
     return (CC.index(x[0]), int(x[1]))
 
-
 for i in sorted(phases.keys(), key=ff):
     print(phases[i][2].strip())
 

@@ -4,7 +4,6 @@ from pprint import pprint
 ## to use
 #python3 stats.py path_to_vcf_for_ground_truth path_to_hc/htx/phaser_output [path_to_hc/htx/phaser_output]
 
-
 def inHLA(k):
     if k[0] == "6":
         if 29691116 <= int(k[1]) and int(k[1]) <= 33054976:
@@ -273,7 +272,6 @@ def parse_vcf(vcf_path: str, phases = dict()):
     return phases
 
 if __name__ == "__main__":
-
     vcf_path = sys.argv[1]
     vcf = parse_vcf(vcf_path)
     for hap_path in sys.argv[2:]:
@@ -285,8 +283,8 @@ if __name__ == "__main__":
         #     #os.path.basename(hap_path),
         #     HLA[0], HLA[1], HLA[2]
         #     ])))
+        print('total_snps,error_snps,total_snps_in_ground_truth,total_edges,total_phased_blocks,switch_error,total_span')
         print(','.join(map(str, [
-            os.path.basename(hap_path),
             len(hap),
             errors, 
             pot_err,
@@ -294,15 +292,5 @@ if __name__ == "__main__":
             blocks,
             100*errors/pot_err,
             span])))
-    print(sys.argv[2:])
 
 
-# # print(f"""stats for {hap_path} (vcf: {vcf_path}):
-# #   snps{len(hap)}
-# #   errors: {errors}
-# #   error%: {100*errors/len(hap):.1f}%
-# #   edges: {edges}
-# #   blocks: {blocks}
-# #   rate%: {100*errors/edges:.3f}%
-# #   span: {span}
-# # """)
