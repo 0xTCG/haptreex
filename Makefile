@@ -1,13 +1,16 @@
-LLC:=/usr/local/opt/llvm@6/bin/llc
-SEQLIB:=/Users/inumanag/Projekti/seq/devel/build
+LLC := llc
 
 all: haptreex
 
 haptreex: haptreex.o
-	clang -L$(SEQLIB) -lomp -lseqrt -o haptreex haptreex.o
+	clang -lomp -lseqrt -o build/haptreex build/haptreex.o
 
 haptreex.o: haptreex.bc
-	$(LLC) haptreex.bc -filetype=obj -o haptreex.o
+	$(LLC) build/haptreex.bc -filetype=obj -o build/haptreex.o
 
-haptreex.bc: main.seq
-	DYLD_LIBRARY_PATH=$(SEQLIB); SEQ_PATH=$(SEQLIB)/../stdlib; $(SEQLIB)/seqc -o haptreex.bc main.seq
+haptreex.bc: src/main.seq
+	mkdir -p build
+	seqc -o build/haptreex.bc src/main.seq
+
+clean:
+	rm -rf build
