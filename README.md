@@ -1,6 +1,6 @@
 # HapTree-X
 
-HapTree-X is a computational tool that phasees various kinds of next-generation sequencing data. 
+HapTree-X is a computational tool that phases various kinds of next-generation sequencing data. 
 Currently, it supports whole-genome, whole-exome, 10X Genomics and RNA-seq data. 
 It is especially powerful on RNA-seq data as it can utilize allelic imbalance to better phase genic regions.
 
@@ -44,7 +44,7 @@ haptreex -v [VCF file with variants to be phased]
          -o [output file]
 ```
 
-If you want to phase 10X genomics sampes, pass `--10x` flag to HapTree-X.
+If you want to phase 10X genomics samples, pass `--10x` flag to HapTree-X.
 
 Finally, HapTree-X can be run in multi-threaded mode. To enable it, set the `OMP_NUM_THREADS` variable to the desired number of threads.
 An example would be:
@@ -65,12 +65,12 @@ Each line in between contains 5 tab-delimited fields, which are in order:
 
 ## Paper data
 
-Exterimental notebook and the scripts used to generate the relevant paper data are located in [scripts/](scirpts) directory.
+Experimental notebook and the scripts used to generate the relevant paper data are located in [scripts/](scripts) directory.
 
 ## Contact
 
 For questions or issues, either open GitHub issue or contact us at:
 
-- Ibrahim Numanagić (inumanag at uvic dot oh canada)
+- Ibrahim Numanagić (inumanag at uvic dot canada)
 - Lillian Zhang (lillianz at mit dot education)
 
