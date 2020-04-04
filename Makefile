@@ -1,9 +1,10 @@
 LLC := llc
+CLANG := clang
 
 all: haptreex
 
 haptreex: haptreex.o
-	clang -lomp -lseqrt -o build/haptreex build/haptreex.o
+	$(CLANG) -lomp -lseqrt -o build/haptreex build/haptreex.o
 
 haptreex.o: haptreex.bc
 	$(LLC) build/haptreex.bc -filetype=obj -o build/haptreex.o
