@@ -12,17 +12,26 @@ import threading
 from rna import Gene
 from graph import Graph
 from alg import Phase, MAX_PHASES
-from os.path import mkdtemp
 
 from files import TEMP_DIR
 from time import timing, time
+from threading import Lock
 
 DASE_ONLY = False
 PLOIDY = 2
 
-# Default: [NE RADI NA SEQu]
-# PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR, *RNA_PARAMS = \
-    # [0.001, 0.7, 0.02, 2.0, 0.2, 0.6, 0.0, 2.0, 0.001, 0.2]
+def mkdtemp(template: str) -> str:
+    cimport mkdtemp(t: cobj) -> cobj
+    t = mkdtemp(template.c_str())
+    if t:
+        return str.from_ptr(t)
+    else:
+        raise OSError("mkdtemp failed")
+
+extend list[T]:
+    def lock_append(self: list[T], it: T, lock: Lock):
+        with lock:
+            self.append(it)
 
 # Better
 PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR, RNA_PARAMS = \
