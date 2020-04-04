@@ -4,7 +4,6 @@ HapTree-X is a computational tool that phasees various kinds of next-generation 
 Currently, it supports whole-genome, whole-exome, 10X Genomics and RNA-seq data. 
 It is especially powerful on RNA-seq data as it can utilize allelic imbalance to better phase genic regions.
 
-
 ## Installation
 
 HapTree-X binaries are available for Linux and macOS.
@@ -54,14 +53,25 @@ An example would be:
 OMP_NUM_THREADS=4 haptreex -v ...
 ```
 
+## Output
+
+HapTree-X's output follows the [HapCUT](https://github.com/vibansal/HapCUT2) output format convention. The output file will contain the set of phased haplotype blocks in a list format where the beginning of each block starts with `BLOCK` and the end of each block is indicated by `*****`.
+
+Each line in between contains 5 tab-delimited fields, which are in order:
+1. Line number in the VCF file (ignoring header lines) that contain the het-SNP
+2. Phase of the het-SNP corresponding to the first digit in 0|1 or 1|0
+3. Phase of the het-SNP corresponding to the second digit in 0|1 or 1|0
+4. Chromosome name
+5. Chromosome position 
+
 ## Paper data
 
-Exterimental notebook and scripts used to generate the relevant paper data are located in [scripts/](scirpts) directory.
+Exterimental notebook and the scripts used to generate the relevant paper data are located in [scripts/](scirpts) directory.
 
 ## Contact
 
 For questions or issues, either open GitHub issue or contact us at:
 
-Ibrahim Numanagić (inumanag@uvic.ca)
-Lillian Zhang (lillianz@mit.edu)
+Ibrahim Numanagić (inumanag at uvic dot oh canada)
+Lillian Zhang (lillianz at mit dot education)
 
