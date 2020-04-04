@@ -71,6 +71,6 @@ Exterimental notebook and the scripts used to generate the relevant paper data a
 
 For questions or issues, either open GitHub issue or contact us at:
 
-Ibrahim Numanagić (inumanag at uvic dot oh canada)
-Lillian Zhang (lillianz at mit dot education)
+- Ibrahim Numanagić (inumanag at uvic dot oh canada)
+- Lillian Zhang (lillianz at mit dot education)
 
