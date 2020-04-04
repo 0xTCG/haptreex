@@ -65,7 +65,7 @@ Each line in between contains 5 tab-delimited fields, which are in order:
 
 ## Paper data
 
-Experimental notebook and the scripts used to generate the relevant paper data are located in [scripts/](scripts) directory.
+Experimental notebook and the scripts used to generate the relevant paper data are located in [paper/](paper) directory.
 
 ## Contact
 
