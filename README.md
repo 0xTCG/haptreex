@@ -6,8 +6,7 @@ It is especially powerful on RNA-seq data as it can utilize allelic imbalance to
 
 ## Installation
 
-HapTree-X binaries are available for Linux and macOS.
-To download them, please go to the Releases tab and download the latest version.
+HapTree-X binaries are available for Linux and macOS in [build](build) directory.
 
 You will need libomp to run HapTree-X. 
 `brew install libomp` (macOS) or `apt install libomp5` (Debian/Ubuntu) should do the trick.
