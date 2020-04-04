@@ -13,7 +13,7 @@ You will need libomp to run HapTree-X.
 
 ## Building
 
-To build HapTree-X from scratch, you will need the latest version of [Seq compiler](seq-lang.org) and [llc](https://llvm.org/docs/CommandGuide/llc.html) (typically shipped with LLVM).
+To build HapTree-X from scratch, you will need the latest version of [Seq compiler](https://seq-lang.org) and [llc](https://llvm.org/docs/CommandGuide/llc.html) (typically shipped with LLVM).
 
 Then, issue `make` to build HapTree-X. The resulting binary will be located in `build/haptreex`.
 
