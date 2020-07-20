@@ -13,8 +13,8 @@ TEMP_DIR = ''
 
 
 def unlink(s):
-    cimport _unlink as unlink(cobj) -> int
-    unlink(s.ptr)
+    cimport unlink(cobj) -> int as _unlink
+    _unlink(s.ptr)
 
 
 class VCF:
