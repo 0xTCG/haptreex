@@ -12,6 +12,11 @@ import sys, os
 TEMP_DIR = ''
 
 
+def unlink(s):
+    cimport _unlink as unlink(cobj) -> int
+    unlink(s.ptr)
+
+
 class VCF:
     snps: list[SNP]
     line_to_snp: dict[int, int]  # 1-based HapCUT-like SNP index
@@ -191,7 +196,6 @@ def parse_bam_10x(
     reads: list[list[tuple[int, int]]], # @mutable
     max_insert_size
 ):
-
     fo = open(f'{TEMP_DIR}/{chr}', 'w')
     parse = parse_read(vcf, ..., ...)
     correct = correct_fragment_10x(..., ..., ..., ..., ..., 1, fo)
@@ -257,7 +261,6 @@ def parse_bam_10x(
             correct(name, BX, XC, read[0], parse(dict[int, set[int]](), read))
     fo.close()
 
-    # with timing(f'sort {chr}'):
     os.system(f'sort -k1,1 -k2,2n {TEMP_DIR}/{chr} -o {TEMP_DIR}/{chr}.sort')
     with timing(f'linking {chr}'), open(f'{TEMP_DIR}/{chr}.sort') as f:
         alleles = dict[int, set[int]]()
@@ -286,6 +289,9 @@ def parse_bam_10x(
                 prev_pos = pos
         correct2(alleles)
 
+    unlink(f'{TEMP_DIR}/{chr}')
+    unlink(f'{TEMP_DIR}/{chr}.sort')
+
 
 def parse_fragmat(vcf: VCF, fragmat: str, cov: dict[int, set[int]], reads: list[list[tuple[int, int]]]):
     print(f"Loading and formatting fragments...")
@@ -297,7 +303,7 @@ def parse_fragmat(vcf: VCF, fragmat: str, cov: dict[int, set[int]], reads: list[
             name, qual = frag[1], frag[-1]
             # if len(frag) % 2 == 1:
                 # raise ValueError(f"fragment file error: {frag}")
-            # if len(qual) == 1 and ord(qual) < QUALITY_CUTOFF:  # TODO: fix this
+            # if len(qual) == 1 and ord(qual) < QUALITY_CUTOFF:  # TODO: bring back?
                 # continue
 
             alleles = list[tuple[int, int]]()
@@ -313,7 +319,8 @@ def parse_fragmat(vcf: VCF, fragmat: str, cov: dict[int, set[int]], reads: list[
                     cov.setdefault(snp.id, set[int]()).add(int(allele))
                     alleles.append((snp.id, int(allele)))
                     idx += 1
-            if alleles: reads.append(alleles)
+            if alleles: 
+                reads.append(alleles)
 
 
 def parse_phases(vcf: VCF, paths: list[tuple[str, int]], r_chr: str, skip_single: bool = True, is_tenx: bool = False):
@@ -324,7 +331,6 @@ def parse_phases(vcf: VCF, paths: list[tuple[str, int]], r_chr: str, skip_single
         coverages = dict[int, set[int]]()
         if is_tenx:
             parse_bam_10x(vcf, path, r_chr, coverages, reads, max_insert_size)
-            # parse_fragmat(vcf, path, coverages, reads)
         else:
             parse_bam(vcf, path, r_chr, coverages, reads, max_insert_size)
         
@@ -385,10 +391,4 @@ def load_dna_data(
     for r in reads:
         r.special_snp = sorted(r.snps)[1]
         r.rates = [0.5] * ploidy
-
-    g = Graph(reads, ploidy)
-    # with timing('make graph'):
-        # print len(g.components)
-    # sys.exit(0)
-
-    return g
+    return Graph(reads, ploidy)

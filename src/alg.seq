@@ -100,12 +100,11 @@ def branch(
     return new_phases
 
 
-# _x_xc2,38984,569,1.4595731582187563,38980,4,1.4597229348383787,34866494
 def prune(phases: list[Phase], is_last: bool) -> list[Phase]:
     if not phases: 
         return list[Phase]()
 
-    # prune solutions based on number of solutions and thresholds
+    # Prune solutions based on number of solutions and the threshold
     threshold = 1.0
     if is_last:
         threshold = 1.0
@@ -124,15 +123,6 @@ def prune(phases: list[Phase], is_last: bool) -> list[Phase]:
     scores = sorted([(abs(p.score - min_val), pi) for pi, p in enumerate(phases)])
     return [phases[pi] for score, pi in scores[:max_items] if score < threshold]
 
-    # for p in sorted(phases, key=sf(..., min_val))[:max_items]:
-    #     if abs(p.score - min_val) >= threshold:
-    #         break
-    #     yield p
-    # i = 0
-    # for p in phases:
-    #     if abs(p.score - min_val) < threshold and i < max_items:
-    #         yield p
-    #         i += 1
 
 def parallel(
     graph: Graph,

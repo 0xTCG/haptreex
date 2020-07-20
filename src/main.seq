@@ -102,7 +102,7 @@ def parse_chromosome(chr, vcf, dna, rna, genes, isoforms, tenx) -> tuple[Graph, 
 
 def main(argv: list[str]):
     global TEMP_DIR, MAX_PHASES
-    print('HapTree-X v2.0 [with Seq v0.9]')
+    print('HapTree-X v2.0')
     random.seed(51)
 
     vcf_path, dna, rna, gtf, out, isoforms, tenx = parse_args(argv)
@@ -128,9 +128,7 @@ def main(argv: list[str]):
     elif PLOIDY != 2:
         raise ValueError('DASE-based phasing works only for diploid genomes')
     
-    # result = list[tuple[str, tuple[Graph, dict[int, Phase]]]]()
     lock = threading.Lock()
-    # vcf.chr_ordered = ['1']
     if tenx:
         TEMP_DIR = mkdtemp("./htx-tmp-XXXXXX")
         MAX_PHASES = 20
@@ -139,11 +137,6 @@ def main(argv: list[str]):
         ( iter(vcf.chr_ordered) 
             ||> parse_chromosome(vcf, dna, rna, genes, isoforms, tenx) 
             |> output.make_solution(vcf, f, lock) )
-            # |>  result.lock_append(lock) )
-    # r = dict(result)
-    #     for c in vcf.chr_ordered:
-    #         g, p = r[c]
-    #         output.make_solution(vcf, g, p, f)
     print(f'HapTree-X done--- the results can be found in {out}')
 
 try:
