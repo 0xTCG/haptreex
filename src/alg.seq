@@ -20,7 +20,8 @@ def read_val_tail(
     error: float,
     relevant_reads: list[Read],
     last_snp: int,
-    prev_snp: int
+    prev_snp: int,
+    ploidy: int
 ) -> float:
     """
     we extend a phasing and then calculating how likely that extension is
@@ -36,7 +37,9 @@ def read_val_tail(
     for read in relevant_reads:
         probs, probs2 = 0.0, 0.0
         for hi, haplo in enumerate(haplotypes):
-            prob = (CONFIDENCE * read.rates[hi]) + (0.5 * (1 - CONFIDENCE))
+            prob = 1.0
+            if ploidy == 2:
+                prob = (CONFIDENCE * read.rates[hi]) + (0.5 * (1 - CONFIDENCE))
             for snp in read.snps:
                 if snp <= last_snp:
                     prob *= (a if read.snps[snp] == haplo[snp] else b)
@@ -61,6 +64,15 @@ def read_val_tail(
     return val - val2
 
 
+def gen_config(p: int) -> list[int]:
+    if p == 1:
+        yield [0]
+        yield [1]
+    else:
+        for i in [0, 1]:
+            for l in gen_config(p - 1):
+                yield [i]+l
+
 def branch(
     phases: list[Phase],
     snp: int,
@@ -69,7 +81,8 @@ def branch(
     threshold: float,
     pair_threshold: float,
     error: float,
-    ploidy: int
+    ploidy: int,
+    configs: list[list[int]]
 ) -> list[Phase]:
     """
     Branch all solutions to highly probable solutions on one additional SNP
@@ -77,21 +90,20 @@ def branch(
     """
 
     new_phases = list[Phase]()
-    configs = list(permutations(list(range(ploidy))))
     costs = [0.0] * len(configs)
     for partial, score in phases:
         for i, config in enumerate(configs):
             for j in range(len(config)):
                 partial[j][snp] = config[j]
             costs[i] = read_val_tail(
-                partial, pair_threshold, error, relevant_reads, snp, prev_snp
+                partial, pair_threshold, error, relevant_reads, snp, prev_snp, ploidy
             )
         t, used = threshold + max(costs), False
         for i, config in enumerate(configs):
             if costs[i] >= t:
                 extended = partial
                 if used:
-                    extended = [copy(partial[0]), copy(partial[1])]
+                    extended = [copy(partial[pi]) for pi in range(len(partial))]
                 else:
                     used = True
                 for j in range(len(config)):
@@ -101,7 +113,7 @@ def branch(
 
 
 def prune(phases: list[Phase], is_last: bool) -> list[Phase]:
-    if not phases: 
+    if not phases:
         return list[Phase]()
 
     # Prune solutions based on number of solutions and the threshold
@@ -132,6 +144,7 @@ def parallel(
     error: float,
     allow_allele_permutations: bool = True
 ):
+    configs = list(gen_config(graph.ploidy))[1:-1]
     phases = [Phase([dict[int, int]() for _ in range(graph.ploidy)], 0.0)]
     skipped = True  # set to allow allele permutations
     prev_snp = -1
@@ -141,7 +154,7 @@ def parallel(
         if allow_allele_permutations:
             phases = branch(
                 phases, snp, prev_snp, graph.snp_reads[snp], threshold, pair_threshold,
-                error, graph.ploidy
+                error, graph.ploidy, configs
             )
             phases = prune(phases, snp == graph.components[root].nodes[-1])
         else:  # specify beginning to remove allele permutations
@@ -159,11 +172,11 @@ def phase(
     threshold = log(threshold / (1 - threshold))
     result = list[tuple[int, Phase]]()
     lock = threading.Lock()
-    ( graph.components.keys() 
-        ||> parallel(graph, ..., threshold, pair_threshold, error) 
+    ( graph.components.keys()
+        ||> parallel(graph, ..., threshold, pair_threshold, error)
         |>  result.lock_append(lock) )
     return {
-        result[i][0]: result[i][1] 
-        for i in range(len(graph.components)) 
-        if result[i][1].haplotypes 
+        result[i][0]: result[i][1]
+        for i in range(len(graph.components))
+        if result[i][1].haplotypes
     }

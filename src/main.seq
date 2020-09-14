@@ -38,18 +38,18 @@ PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR, RNA_PARAMS = \
     0.001, 0.8, 0.01, [2.0, 0.2, 0.7, 0.0, 2.0, 0.001, 0.2]
 
 def parse_args(argv: list[str]):
-    global PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR
+    global PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR, PLOIDY
     try:
         opts, args = getopt(
-            argv, 
+            argv,
             "hv:d:r:g:i:o:dp:z:",
             [
-                "help", 
-                "vcf=", 
-                "dna=", 
-                "rna=", 
-                "gene=", 
-                "isoform=", 
+                "help",
+                "vcf=",
+                "dna=",
+                "rna=",
+                "gene=",
+                "isoform=",
                 "out=",
                 "only-dase",
                 "ploidy",
@@ -71,7 +71,7 @@ def parse_args(argv: list[str]):
             elif o in ['-z', '--z']: Z = a
             elif o in ['-o', '--out']: output = a
             elif o in ['-d', '--only-dase']: DASE_ONLY = True
-            elif o in ['-p', '--ploidy']: ploidy = int(a)
+            elif o in ['-p', '--ploidy']: PLOIDY = int(a)
             elif o in ['--10x']: tenx = True
             elif o == "--phase-threshold": PHASE_THRESHOLD = float(a)
             elif o == "--pair-threshold": PAIR_THRESHOLD = float(a)
@@ -86,7 +86,7 @@ def parse_chromosome(chr, vcf, dna, rna, genes, isoforms, tenx) -> tuple[Graph, 
         g: graph.Graph = None
         if not genes or rna == "":
             dnas = list[tuple[str, int]]()
-            if dna: dnas.append((dna, 1000)) 
+            if dna: dnas.append((dna, 1000))
             if rna: dnas.append((rna, 0x7FFFFFFF))
             g = files.load_dna_data(vcf, chr, dnas, PLOIDY, tenx=tenx)
         else:
@@ -107,6 +107,7 @@ def main(argv: list[str]):
 
     vcf_path, dna, rna, gtf, out, isoforms, tenx = parse_args(argv)
 
+    print(f'Ploidy: {PLOIDY}')
     print(f"Loading VCF file {vcf_path}...")
     if not vcf_path:
         raise ValueError("Error: VCF file required")
@@ -127,15 +128,15 @@ def main(argv: list[str]):
         print("Running DNA/RNA phasing without DASE (no gene data provided)")
     elif PLOIDY != 2:
         raise ValueError('DASE-based phasing works only for diploid genomes')
-    
+
     lock = threading.Lock()
     if tenx:
         TEMP_DIR = mkdtemp("./htx-tmp-XXXXXX")
         MAX_PHASES = 20
         PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR= 0.001, 0.7, 0.03
     with open(out, "w") as f:
-        ( iter(vcf.chr_ordered) 
-            ||> parse_chromosome(vcf, dna, rna, genes, isoforms, tenx) 
+        ( iter(vcf.chr_ordered)
+            ||> parse_chromosome(vcf, dna, rna, genes, isoforms, tenx)
             |> output.make_solution(vcf, f, lock) )
     print(f'HapTree-X done--- the results can be found in {out}')
 

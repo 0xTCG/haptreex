@@ -77,7 +77,7 @@ class VCF:
                 lo = mid + 1
             else:
                 hi = mid
-        return lo    
+        return lo
 
 
 def parse_read(vcf: VCF, fragment: dict[int, set[int]], record: tuple[int, int, int, CIGAR, seq, str]) -> dict[int, set[int]]:
@@ -111,7 +111,7 @@ def correct_fragment(
     reads: list[list[tuple[int, int]]], # @mutable
     threshold: int
 ):
-    if len(fragment) == 0: 
+    if len(fragment) == 0:
         return
     count = len(fragment) - sum(1 for i in list(fragment) if len(fragment[i]) > 1)
     if count >= threshold:
@@ -145,31 +145,31 @@ def parse_bam(
         if tid == -1: return
 
         for line in sam:
-            if line.tid != tid: 
+            if line.tid != tid:
                 break
             # Skip invalid reads
             if line.unmapped or line.secondary or line.duplicate \
                 or line.supplementary or not len(line.cigar) : #or line.mapq < 10:
                 continue
-            
+
             # Find matching SNP range
-            while vlo < vhi and vcf.snps[vlo].pos < line.pos: 
+            while vlo < vhi and vcf.snps[vlo].pos < line.pos:
                 vlo += 1
-            if vlo == vhi: 
+            if vlo == vhi:
                 break
-            if line.pos + line.cigar.rlen < vcf.snps[vlo].pos: 
+            if line.pos + line.cigar.rlen < vcf.snps[vlo].pos:
                 continue
 
             # FIX: in '#/' adds 15 secs to runtime; this part is still 7 secs :(
             name = line.query_name
             if len(name) > 2 and (name[-2] == '#' or name[-2] == '/'):
                 name = name[:-2]
-            
+
             if line.mate_unmapped or line.tid != line.mate_tid or line.insert_size > max_insert_size:
                 correct(parse(dict[int, set[int]](), (line.pos, vlo, vhi, line.cigar, line.read, line.qual)))
             elif name in seen: # Paired reads
-                (parse(dict[int, set[int]](), seen[name]) 
-                    |> parse(..., (line.pos, vlo, vhi, line.cigar, line.read, line.qual)) 
+                (parse(dict[int, set[int]](), seen[name])
+                    |> parse(..., (line.pos, vlo, vhi, line.cigar, line.read, line.qual))
                     |> correct)
                 del seen[name]
             elif line.mate_pos < line.pos: # already seen but not added
@@ -212,21 +212,21 @@ def parse_bam_10x(
                 break
         if tid == -1: return
         for line in sam:
-            if line.tid != tid: 
+            if line.tid != tid:
                 break
             # Skip invalid reads
             if line.unmapped or line.secondary or line.duplicate \
                 or line.supplementary or not len(line.cigar) or line.mapq < 20:
                 continue
-            
+
             # Find matching SNP range
-            while vlo < vhi and vcf.snps[vlo].pos < line.pos: 
+            while vlo < vhi and vcf.snps[vlo].pos < line.pos:
                 vlo += 1
-            if vlo == vhi: 
+            if vlo == vhi:
                 break
-            if line.pos + line.cigar.rlen < vcf.snps[vlo].pos: 
+            if line.pos + line.cigar.rlen < vcf.snps[vlo].pos:
                 continue
-            
+
             # OEAs
             name = line.query_name
             if len(name) > 2 and (name[-2] == '#' or name[-2] == '/'):
@@ -234,22 +234,22 @@ def parse_bam_10x(
             BX = line.aux('BX').Z if line.aux('BX') else '*'
             XC = line.aux('XC').i if line.aux('XC') else \
                  (line.aux('MI').i if line.aux('MI') else -1)
-            
+
             if line.mate_unmapped or line.tid != line.mate_tid or line.insert_size > max_insert_size:
                 correct(
-                    name, BX, XC, line.pos, 
+                    name, BX, XC, line.pos,
                     parse(dict[int, set[int]](), (line.pos, vlo, vhi, line.cigar, line.read, line.qual))
                 )
             elif name in seen:
                 s = seen[name]
-                (parse(dict[int, set[int]](), s) 
-                    |> parse(..., (line.pos, vlo, vhi, line.cigar, line.read, line.qual)) 
+                (parse(dict[int, set[int]](), s)
+                    |> parse(..., (line.pos, vlo, vhi, line.cigar, line.read, line.qual))
                     |> correct(name, BX, XC, s[0], ...))
                 del seen[name]
                 del barcodes[name]
             elif line.mate_pos < line.pos: # already seen but not added
                 correct(
-                    name, BX, XC, line.pos, 
+                    name, BX, XC, line.pos,
                     parse(dict[int, set[int]](), (line.pos, vlo, vhi, line.cigar, line.read, line.qual))
                 )
             else:
@@ -293,7 +293,7 @@ def parse_bam_10x(
     unlink(f'{TEMP_DIR}/{chr}.sort')
 
 
-def parse_fragmat(vcf: VCF, fragmat: str, cov: dict[int, set[int]], reads: list[list[tuple[int, int]]]):
+def parse_fragmat(vcf: VCF, fragmat: str, chr: str, cov: dict[int, set[int]], reads: list[list[tuple[int, int]]], start: int = 5):
     print(f"Loading and formatting fragments...")
     with open(fragmat) as f:
         for r in f:
@@ -307,7 +307,7 @@ def parse_fragmat(vcf: VCF, fragmat: str, cov: dict[int, set[int]], reads: list[
                 # continue
 
             alleles = list[tuple[int, int]]()
-            for i in range(5, len(frag) - 1, 2):
+            for i in range(start, len(frag) - 1, 2):
                 idx = int(frag[i])
                 for allele in frag[i + 1]:
                     if idx not in vcf.line_to_snp:
@@ -319,7 +319,7 @@ def parse_fragmat(vcf: VCF, fragmat: str, cov: dict[int, set[int]], reads: list[
                     cov.setdefault(snp.id, set[int]()).add(int(allele))
                     alleles.append((snp.id, int(allele)))
                     idx += 1
-            if alleles: 
+            if alleles:
                 reads.append(alleles)
 
 
@@ -332,16 +332,17 @@ def parse_phases(vcf: VCF, paths: list[tuple[str, int]], r_chr: str, skip_single
         if is_tenx:
             parse_bam_10x(vcf, path, r_chr, coverages, reads, max_insert_size)
         else:
+            # parse_fragmat(vcf, path, r_chr, coverages, reads, 2)
             parse_bam(vcf, path, r_chr, coverages, reads, max_insert_size)
-        
+
         # Ensure that all reads have expressed SNPs
         for read_i in range(start_len, len(reads)):
             read = [i for i in reads[read_i] if i[0] in coverages]
             if len(read) and not (skip_single and len(read) <= 1):
-                reads[read_i] = read 
+                reads[read_i] = read
             else:
                 reads[read_i].clear()
-        
+
     read_counter = dict[list[tuple[int, int]], int]()
     for r in reads:
         key = sorted(r)
@@ -390,5 +391,5 @@ def load_dna_data(
         reads += ~rna_reads
     for r in reads:
         r.special_snp = sorted(r.snps)[1]
-        r.rates = [0.5] * ploidy
+        r.rates = [1.0/ploidy] * ploidy
     return Graph(reads, ploidy)
