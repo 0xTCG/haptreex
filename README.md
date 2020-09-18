@@ -8,9 +8,6 @@ It is especially powerful on RNA-seq data as it can utilize allelic imbalance to
 
 HapTree-X binaries are available for Linux and macOS under [releases](https://github.com/0xTCG/haptreex/releases).
 
-You will need libomp to run HapTree-X. 
-`brew install libomp` (macOS) or `apt install libomp5` (Debian/Ubuntu) should do the trick.
-
 ## Building
 
 To build HapTree-X from scratch, you will need the latest version of [Seq compiler](https://seq-lang.org) and [llc](https://llvm.org/docs/CommandGuide/llc.html) (typically shipped with LLVM).
