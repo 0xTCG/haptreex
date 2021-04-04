@@ -20,16 +20,17 @@ from threading import Lock
 DASE_ONLY = False
 PLOIDY = 2
 
-def mkdtemp(template: str) -> str:
-    cimport mkdtemp(t: cobj) -> cobj
+def mkdtemp(template: str):
+    from C import mkdtemp(cobj) -> cobj
     t = mkdtemp(template.c_str())
     if t:
         return str.from_ptr(t)
     else:
         raise OSError("mkdtemp failed")
 
-extend list[T]:
-    def lock_append(self: list[T], it: T, lock: Lock):
+@extend
+class List[T]:
+    def lock_append(self, it: T, lock: Lock):
         with lock:
             self.append(it)
 
@@ -37,7 +38,7 @@ extend list[T]:
 PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR, RNA_PARAMS = \
     0.001, 0.8, 0.01, [2.0, 0.2, 0.7, 0.0, 2.0, 0.001, 0.2]
 
-def parse_args(argv: list[str]):
+def parse_args(argv):
     global PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR, PLOIDY
     try:
         opts, args = getopt(
@@ -81,18 +82,20 @@ def parse_args(argv: list[str]):
     except GetoptError as err:
         raise ValueError(err.message)
 
-def parse_chromosome(chr, vcf, dna, rna, genes, isoforms, tenx) -> tuple[Graph, dict[int, Phase]]:
+def parse_chromosome(chr, vcf, dna, rna, genes, isoforms, tenx):
     with timing(f'Reading {chr}'):
-        g: graph.Graph = None
+        g = None
         if not genes or rna == "":
-            dnas = list[tuple[str, int]]()
-            if dna: dnas.append((dna, 1000))
-            if rna: dnas.append((rna, 0x7FFFFFFF))
+            dnas = []
+            if dna:
+                dnas.append((dna, 1000))
+            if rna:
+                dnas.append((rna, 0x7FFFFFFF))
             g = files.load_dna_data(vcf, chr, dnas, PLOIDY, tenx=tenx)
         else:
             r = files.load_rna_data(vcf, chr, genes, [rna], isoforms, RNA_PARAMS)
             if not dna:
-                g = graph.Graph(r.multi_reads if not DASE_ONLY else list[read.Read](), r.ploidy)
+                g = graph.Graph(r.multi_reads if not DASE_ONLY else [], r.ploidy)
             else:
                 g = files.load_dna_data(vcf, chr, [(dna, 1000)], PLOIDY, r.multi_reads, tenx)
             g.integrate_rna(r)
@@ -100,7 +103,7 @@ def parse_chromosome(chr, vcf, dna, rna, genes, isoforms, tenx) -> tuple[Graph, 
             phases = alg.phase(g, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
             return g, phases
 
-def main(argv: list[str]):
+def main(argv):
     global TEMP_DIR, MAX_PHASES
     print('HapTree-X v2.0')
     random.seed(51)
@@ -116,7 +119,7 @@ def main(argv: list[str]):
     vcf = files.VCF(vcf_path)
     print(f"{len(vcf.snps)} SNPs in VCF file")
 
-    genes = list[Gene]()
+    genes = []
     if gtf != "":
         print(f"Loading GTF {gtf}...")
         genes = list(Gene.from_gtf(gtf, vcf.chromosomes))
@@ -136,8 +139,8 @@ def main(argv: list[str]):
         PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR= 0.001, 0.7, 0.03
     with open(out, "w") as f:
         ( iter(vcf.chr_ordered)
-            ||> parse_chromosome(vcf, dna, rna, genes, isoforms, tenx)
-            |> output.make_solution(vcf, f, lock) )
+          ||> parse_chromosome(vcf, dna, rna, genes, isoforms, tenx)
+          |>  output.make_solution(vcf, f, lock) )
     print(f'HapTree-X done--- the results can be found in {out}')
 
 try:

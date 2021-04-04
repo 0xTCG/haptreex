@@ -1,5 +1,5 @@
 from os.path import splitext
-from core.file import is_binary
+from internal.file import is_binary
 from bio.bam import *
 
 from read import SNP, Read
@@ -13,17 +13,17 @@ TEMP_DIR = ''
 
 
 def unlink(s):
-    cimport unlink(cobj) -> int as _unlink
+    from C import unlink(cobj) -> int as _unlink
     _unlink(s.ptr)
 
 
 class VCF:
-    snps: list[SNP]
-    line_to_snp: dict[int, int]  # 1-based HapCUT-like SNP index
-    chromosomes: dict[str, tuple[int, int]]  # Chromosome name to the SNP span
-    chr_ordered: list[str]
+    snps: List[SNP]
+    line_to_snp: Dict[int, int]  # 1-based HapCUT-like SNP index
+    chromosomes: Dict[str, Tuple[int, int]]  # Chromosome name to the SNP span
+    chr_ordered: List[str]
 
-    def __init__(self: VCF, path: str):
+    def __init__(self, path: str):
         """
         Parse a VCF file and return a dictionary of sorted SNPs:
             d := {chromosome_name: sorted([snp_1, snp_2])}
@@ -32,8 +32,8 @@ class VCF:
         Each snp_i is a SNP that is heterozygous in the sample (i.e. |set(GT(snp_i))| > 1).
         """
 
-        self.snps, self.line_to_snp = list[SNP](), dict[int, int]()
-        self.chromosomes, self.chr_ordered = dict[str, tuple[int, int]](), list[str]()
+        self.snps, self.line_to_snp = [], {}
+        self.chromosomes, self.chr_ordered = {}, []
         with open(path) as vcf:
             prev_chr, seen_snps = "", 0
             for line in vcf:
@@ -67,7 +67,7 @@ class VCF:
             if prev_chr:
                 self.chromosomes[prev_chr] = (self.chromosomes[prev_chr][0], len(self.snps))
 
-    def find_first(self: VCF, chr: str, pos: int) -> int:
+    def find_first(self, chr: str, pos: int):
         if chr not in self.chromosomes:
             return -1
         lo, hi = self.chromosomes[chr]
@@ -80,12 +80,12 @@ class VCF:
         return lo
 
 
-def parse_read(vcf: VCF, fragment: dict[int, set[int]], record: tuple[int, int, int, CIGAR, seq, str]) -> dict[int, set[int]]:
+def parse_read(vcf: VCF, fragment: Dict[int, Set[int]], record: Tuple[int, int, int, CIGAR, seq, str]):
     ref, lo, hi, cigar, sequence, qual = record
     read = 0
     for sz, op in cigar:
         match op:
-            case 'M' or '=' or 'X':
+            case 'M' | '=' | 'X':
                 while lo < hi:
                     snp = vcf.snps[lo]
                     if ref + sz <= snp.pos:
@@ -94,32 +94,32 @@ def parse_read(vcf: VCF, fragment: dict[int, set[int]], record: tuple[int, int, 
                     if ref <= snp.pos and sequence[t] in snp.alleles:
                         al = snp.alleles.index(sequence[t])
                         if ord(qual[t]) - 33 >= 10:
-                            fragment.setdefault(lo, set[int]()).add(al)
+                            fragment.setdefault(lo, set()).add(al)
                     lo += 1
                 read += sz
                 ref += sz
-            case 'I' or 'S': read += sz
-            case 'D' or 'N': ref += sz
+            case 'I' | 'S': read += sz
+            case 'D' | 'N': ref += sz
             case _: pass
     return fragment
 
 
 def correct_fragment(
     name: str,
-    fragment: dict[int, set[int]],
-    cov: dict[int, set[int]], # @mutable
-    reads: list[list[tuple[int, int]]], # @mutable
+    fragment: Dict[int, Set[int]],
+    cov: Dict[int, Set[int]], # @mutable
+    reads: List[List[Tuple[int, int]]], # @mutable
     threshold: int
 ):
     if len(fragment) == 0:
         return
     count = len(fragment) - sum(1 for i in list(fragment) if len(fragment[i]) > 1)
     if count >= threshold:
-        reads.append(list[tuple[int, int]]())
+        reads.append([])
         for pos, alleles in fragment.items():
             if len(alleles) == 1:
                 al = alleles.pop()
-                cov.setdefault(pos, set[int]()).add(al)
+                cov.setdefault(pos, set()).add(al)
                 reads[-1].append((pos, al))
 
 
@@ -127,14 +127,14 @@ def parse_bam(
     vcf: VCF,
     sam_path: str,
     chr: str,
-    cov: dict[int, set[int]], # @mutable
-    reads: list[list[tuple[int, int]]], # @mutable
+    cov: Dict[int, Set[int]], # @mutable
+    reads: List[List[Tuple[int, int]]], # @mutable
     max_insert_size,
     threshold: int = 1
 ):
-    parse = parse_read(vcf, ..., ...)
-    correct = correct_fragment('', ..., cov, reads, threshold)
-    seen = dict[str, tuple[int, int, int, CIGAR, seq, str]]()
+    parse = parse_read(vcf, ...)
+    correct = correct_fragment('', cov=cov, reads=reads, threshold=threshold, ...)
+    seen = {}
     with BAM(sam_path, chr, copy=False) as sam:
         vlo, vhi = vcf.chromosomes[chr]
         tid = -1
@@ -166,21 +166,21 @@ def parse_bam(
                 name = name[:-2]
 
             if line.mate_unmapped or line.tid != line.mate_tid or line.insert_size > max_insert_size:
-                correct(parse(dict[int, set[int]](), (line.pos, vlo, vhi, line.cigar, line.read, line.qual)))
+                correct(parse({}, (line.pos, vlo, vhi, line.cigar, line.read, line.qual)))
             elif name in seen: # Paired reads
-                (parse(dict[int, set[int]](), seen[name])
+                (parse({}, seen[name])
                     |> parse(..., (line.pos, vlo, vhi, line.cigar, line.read, line.qual))
                     |> correct)
                 del seen[name]
             elif line.mate_pos < line.pos: # already seen but not added
-                correct(parse(dict[int, set[int]](), (line.pos, vlo, vhi, line.cigar, line.read, line.qual)))
+                correct(parse({}, (line.pos, vlo, vhi, line.cigar, line.read, line.qual)))
             else:
                 seen[copy(name)] = (line.pos, vlo, vhi, copy(line.cigar), copy(line.read), copy(line.qual))
         for _, read in seen.items():
-            correct(parse(dict[int, set[int]](), read))
+            correct(parse({}, read))
 
 
-def correct_fragment_10x(name: str, BX: str, XC: int, pos: int, fragment: dict[int, set[int]], threshold: int, fo: File):
+def correct_fragment_10x(name: str, BX: str, XC: int, pos: int, fragment: Dict[int, Set[int]], threshold: int, fo: File):
     count = len(fragment) - sum(1 for i in list(fragment) if len(fragment[i]) > 1)
     if count >= threshold:
         fo.write(f'{BX} {XC} {pos} {name}')
@@ -192,17 +192,16 @@ def correct_fragment_10x(name: str, BX: str, XC: int, pos: int, fragment: dict[i
 
 def parse_bam_10x(
     vcf: VCF, sam_path: str, chr: str,
-    cov: dict[int, set[int]], # @mutable
-    reads: list[list[tuple[int, int]]], # @mutable
+    cov: Dict[int, Set[int]], # @mutable
+    reads: List[List[Tuple[int, int]]], # @mutable
     max_insert_size
 ):
     fo = open(f'{TEMP_DIR}/{chr}', 'w')
-    parse = parse_read(vcf, ..., ...)
-    correct = correct_fragment_10x(..., ..., ..., ..., ..., 1, fo)
-    correct2 = correct_fragment('', ..., cov, reads, 1)
+    parse = parse_read(vcf, ...)
+    correct = correct_fragment_10x(threshold=1, fo=fo, ...)
+    correct2 = correct_fragment('', cov=cov, reads=reads, threshold=1, ...)
 
-    seen = dict[str, tuple[int, int, int, CIGAR, seq, str]]()
-    barcodes = dict[str, tuple[str, int]]()
+    seen, barcodes = {}, {}
     with BAM(sam_path, chr, copy=False) as sam:
         vlo, vhi = vcf.chromosomes[chr]
         tid = -1
@@ -238,11 +237,11 @@ def parse_bam_10x(
             if line.mate_unmapped or line.tid != line.mate_tid or line.insert_size > max_insert_size:
                 correct(
                     name, BX, XC, line.pos,
-                    parse(dict[int, set[int]](), (line.pos, vlo, vhi, line.cigar, line.read, line.qual))
+                    parse({}, (line.pos, vlo, vhi, line.cigar, line.read, line.qual))
                 )
             elif name in seen:
                 s = seen[name]
-                (parse(dict[int, set[int]](), s)
+                (parse({}, s)
                     |> parse(..., (line.pos, vlo, vhi, line.cigar, line.read, line.qual))
                     |> correct(name, BX, XC, s[0], ...))
                 del seen[name]
@@ -250,7 +249,7 @@ def parse_bam_10x(
             elif line.mate_pos < line.pos: # already seen but not added
                 correct(
                     name, BX, XC, line.pos,
-                    parse(dict[int, set[int]](), (line.pos, vlo, vhi, line.cigar, line.read, line.qual))
+                    parse({}, (line.pos, vlo, vhi, line.cigar, line.read, line.qual))
                 )
             else:
                 c = copy(name)
@@ -258,19 +257,19 @@ def parse_bam_10x(
                 barcodes[c] = (BX, XC)
         for name, read in seen.items():
             BX, XC = barcodes[name]
-            correct(name, BX, XC, read[0], parse(dict[int, set[int]](), read))
+            correct(name, BX, XC, read[0], parse({}, read))
     fo.close()
 
     os.system(f'sort -k1,1 -k2,2n {TEMP_DIR}/{chr} -o {TEMP_DIR}/{chr}.sort')
     with timing(f'linking {chr}'), open(f'{TEMP_DIR}/{chr}.sort') as f:
-        alleles = dict[int, set[int]]()
+        alleles = {}
         prev_bx, prev_xc, prev_pos = '*', -1, 0
         for l in f:
             lx = l.split(' ')
             bx, xc, pos = lx[0], int(lx[1]), int(lx[2])
             if bx == '*':
                 for i in range(4, len(lx), 2):
-                    alleles.setdefault(int(lx[i]), set[int]()).add(int(lx[i+1]))
+                    alleles.setdefault(int(lx[i]), set()).add(int(lx[i+1]))
                 correct2(alleles)
                 alleles.clear()
             else:
@@ -285,7 +284,7 @@ def parse_bam_10x(
                     alleles.clear()
                     prev_xc = xc
                 for i in range(4, len(lx), 2):
-                    alleles.setdefault(int(lx[i]), set[int]()).add(int(lx[i+1]))
+                    alleles.setdefault(int(lx[i]), set()).add(int(lx[i+1]))
                 prev_pos = pos
         correct2(alleles)
 
@@ -293,7 +292,7 @@ def parse_bam_10x(
     unlink(f'{TEMP_DIR}/{chr}.sort')
 
 
-def parse_fragmat(vcf: VCF, fragmat: str, chr: str, cov: dict[int, set[int]], reads: list[list[tuple[int, int]]], start: int = 5):
+def parse_fragmat(vcf: VCF, fragmat: str, chr: str, cov: Dict[int, Set[int]], reads: List[List[Tuple[int, int]]], start: int = 5):
     print(f"Loading and formatting fragments...")
     with open(fragmat) as f:
         for r in f:
@@ -306,7 +305,7 @@ def parse_fragmat(vcf: VCF, fragmat: str, chr: str, cov: dict[int, set[int]], re
             # if len(qual) == 1 and ord(qual) < QUALITY_CUTOFF:  # TODO: bring back?
                 # continue
 
-            alleles = list[tuple[int, int]]()
+            alleles = []
             for i in range(start, len(frag) - 1, 2):
                 idx = int(frag[i])
                 for allele in frag[i + 1]:
@@ -316,19 +315,19 @@ def parse_fragmat(vcf: VCF, fragmat: str, chr: str, cov: dict[int, set[int]], re
                     snp = vcf.snps[vcf.line_to_snp[idx]]
                     if not 0 <= int(allele) < len(snp.alleles):
                         raise ValueError(f'Invalid allele {allele} for SNP {snp}')
-                    cov.setdefault(snp.id, set[int]()).add(int(allele))
+                    cov.setdefault(snp.id, set()).add(int(allele))
                     alleles.append((snp.id, int(allele)))
                     idx += 1
             if alleles:
                 reads.append(alleles)
 
 
-def parse_phases(vcf: VCF, paths: list[tuple[str, int]], r_chr: str, skip_single: bool = True, is_tenx: bool = False):
-    reads = list[list[tuple[int, int]]]()
+def parse_phases(vcf: VCF, paths: List[Tuple[str, int]], r_chr: str, skip_single: bool = True, is_tenx: bool = False):
+    reads = []
     for path, max_insert_size in paths:
         # print 'Reading', r_chr, is_tenx, path, max_insert_size
         start_len = len(reads)
-        coverages = dict[int, set[int]]()
+        coverages = {}
         if is_tenx:
             parse_bam_10x(vcf, path, r_chr, coverages, reads, max_insert_size)
         else:
@@ -343,7 +342,7 @@ def parse_phases(vcf: VCF, paths: list[tuple[str, int]], r_chr: str, skip_single
             else:
                 reads[read_i].clear()
 
-    read_counter = dict[list[tuple[int, int]], int]()
+    read_counter = {}
     for r in reads:
         key = sorted(r)
         if len(key) <= int(skip_single):
@@ -361,10 +360,10 @@ def parse_phases(vcf: VCF, paths: list[tuple[str, int]], r_chr: str, skip_single
 def load_rna_data(
     vcf: VCF,
     r_chr: str,
-    genes: list[Gene],
-    paths: list[str],
+    genes: List[Gene],
+    paths: List[str],
     isoforms_path: str,
-    args: list[float]
+    args: List[float]
 ):
     reads = parse_phases(vcf, [(p, 0x7FFFFFFF) for p in paths], r_chr, skip_single=False)
     if isoforms_path:
@@ -381,11 +380,11 @@ def load_rna_data(
 def load_dna_data(
     vcf: VCF,
     r_chr: str,
-    paths: list[tuple[str, int]],
+    paths: List[Tuple[str, int]],
     ploidy: int = 2,
-    rna_reads: optional[list[Read]] = None,
+    rna_reads: Optional[List[Read]] = None,
     tenx: bool = False
-) -> Graph:
+):
     reads = parse_phases(vcf, paths, r_chr, skip_single=True, is_tenx=tenx)
     if rna_reads:
         reads += ~rna_reads

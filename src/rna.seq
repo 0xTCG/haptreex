@@ -14,21 +14,20 @@ class Gene:
     id: int  # index
     name: str  # a.k.a. transcript
     chr: str
-    interval: tuple[int, int]
+    interval: Tuple[int, int]
     sign: str
-    exons: list[tuple[int, int]]  # List of (start, end)
-
-    neighbors: set[int]
-    snps: set[int]
+    exons: List[Tuple[int, int]]  # List of (start, end)
+    neighbors: Set[int]
+    snps: Set[int]
 
     def __init__(
-        self: Gene,
+        self,
         id: int,
         name: str,
         chr: str,
-        interval: tuple[int, int],
+        interval: Tuple[int, int],
         sign: str,
-        exons: list[tuple[int, int]],
+        exons: List[Tuple[int, int]],
     ):
         self.id = id
         self.name = name
@@ -37,20 +36,20 @@ class Gene:
         self.sign = sign
         self.exons = exons
 
-        self.neighbors = set[int]()
-        self.snps = set[int]()
+        self.neighbors = set()
+        self.snps = set()
 
-    def __eq__(self: Gene, other: Gene):
+    def __eq__(self, other: Gene):
         return self.name == other.name
 
-    def set_snps(self: Gene, positions: list[tuple[int, int]]):
+    def set_snps(self, positions: List[Tuple[int, int]]):
         h = bisect_left(positions, (self.interval[0], 0))
         if h == len(positions):
             return
         if not self.exons:
             return
         exon = 0
-        self.snps = set[int]()
+        self.snps = set()
         for p in range(h, len(positions)):
             pos, snp = positions[p]
             pos += 1
@@ -64,7 +63,7 @@ class Gene:
                 else:
                     exon += 1
 
-    def from_gtf(gtf_path: str, chroms: dict[str, tuple[int, int]]) -> Gene:
+    def from_gtf(gtf_path: str, chroms: Dict[str, Tuple[int, int]]):
         b = [a.split("\t") for a in open(gtf_path, "r") if a[0] != '#']
 
         def parse_f(f):
@@ -81,7 +80,7 @@ class Gene:
                 info = dict(parse_f(f.strip()) for f in b[i][8].split(";") if f.strip())
                 name = info.get("gene_name", info["transcript_id"])
                 i += 1
-                exons = list[tuple[int, int]]()
+                exons = []
                 while i < len(b) and b[i][2] != "transcript":
                     if b[i][2] == "exon":
                         exon_start, exon_end = int(b[i][3]) - 1, int(b[i][4])
@@ -95,43 +94,41 @@ class Gene:
 
 
 class RNAGraph:
-    genes: list[Gene]
+    genes: List[Gene]
     ploidy: int
-    multi_reads: list[Read]
-    counts: dict[int, list[int]]
-    rates: dict[int, list[float]]
+    multi_reads: List[Read]
+    counts: Dict[int, List[int]]
+    rates: Dict[int, List[float]]
 
-    components: dict[int, Component]  # {Component ID: Component}
-    component_index: dict[int, int]  # SNP ID: Component ID
-    snp_reads: dict[int, list[Read]]  # Reads for each SNP
+    components: Dict[int, Component]  # {Component ID: Component}
+    component_index: Dict[int, int]  # SNP ID: Component ID
+    snp_reads: Dict[int, List[Read]]  # Reads for each SNP
 
     def __init__(
-        self: RNAGraph,
-        snps: list[SNP],
-        genes: list[Gene],
-        reads: list[Read],
-        args: list[float]
+        self,
+        snps: List[SNP],
+        genes: List[Gene],
+        reads: List[Read],
+        args: List[float]
     ):
         self.ploidy = 2
         self.multi_reads = [r for r in reads if len(r.snps) > 1]
 
-        # print 'args',len(args)
         ( size_factor, rate_factor, rate_cutoff,
           coverage_cutoff, rate_dep_cutoff, cutoff, conf ) = args
 
         _t=time.time()
-        # print 'in1', time.time()-_t
         # Initialize gene nodes
         # (1) Initialize gene SNPs
-        phasable_positions = dict[str, list[tuple[int, int]]]()
+        phasable_positions = {}
         # Add `if len(r.snps) >= 1` to the set below to enable the original behaviour
         snp_candidates = {
-            k for r in reads for k in r.snps 
+            k for r in reads for k in r.snps
             if DASE_ALL_READS or len(r.snps) == 1
         }
         for s in snp_candidates:
             snp = snps[s]
-            l = phasable_positions.setdefault(snp.chr, list[tuple[int, int]]())
+            l = phasable_positions.setdefault(snp.chr, [])
             l.append((snp.pos, snp.id))
         for p in phasable_positions.values():
             p.sort()
@@ -141,10 +138,10 @@ class RNAGraph:
 
         # print 'in2', time.time()-_t
         # (2) Initialize gene neighbours (genes that share a common SNP)
-        snp_to_genes = dict[int, set[int]]()  # SNP to gene
+        snp_to_genes = {}  # SNP to gene
         for gi, g in enumerate(genes):
             for s in g.snps:
-                snp_to_genes.setdefault(s, set[int]()).add(gi)
+                snp_to_genes.setdefault(s, set()).add(gi)
         for g in genes:
             for snp in g.snps:
                 for n in snp_to_genes[snp]:
@@ -164,36 +161,36 @@ class RNAGraph:
             for snp in genes[gene].snps
         }
         # self.final = self.dual_gene()  # Which types of genes to use?
-        comp_to_snps = {m: list[int]() for m in gene_components}
+        comp_to_snps = {m: [] for m in gene_components}
         for s in snp_to_comp:
             comp_to_snps[snp_to_comp[s]].append(s)
-        comp_snps = dict[int, list[int]]()  # root SNP -> list of SNPs in component
+        comp_snps = {}  # root SNP -> list of SNPs in component
         for root, snps in comp_to_snps.items():
             if len(snps) > 1:
                 snps.sort()
                 comp_snps[snps[0]] = sorted(snps)
-        
+
         # print 'in4', time.time()-_t
         # Only use reads that fall strictly within a gene
-        comp_to_reads = {root: list[Read]() for root in gene_components}
+        comp_to_reads = {root: [] for root in gene_components}
         NOTSEEN = -1  # NOTSEEN span non-exonic regions
         OVERSEEN = -2  # OVERSEEN typically span exonic and intronic regions
-        comp_to_reads[OVERSEEN], comp_to_reads[NOTSEEN] = list[Read](), list[Read]()
+        comp_to_reads[OVERSEEN], comp_to_reads[NOTSEEN] = [], []
         for read in reads:
             comps = {snp_to_comp.get(snp, NOTSEEN) for snp in read.snps}
             # comps -= {NOTSEEN}  # Uncomment to allow reads with partial exonic span
             comp = comps.pop() if len(comps) == 1 else OVERSEEN
             assert comp in comp_to_reads
             comp_to_reads[comp].append(read)
-        self.snp_reads = dict[int, list[Read]]()  # SNP -> 1-reads in a component
+        self.snp_reads = {}  # SNP -> 1-reads in a component
         for root in comp_snps:
             for read in comp_to_reads[snp_to_comp[root]]:
                 if len(read.snps) == 1:
                     snp = list(read.snps.keys())[0]
-                    self.snp_reads.setdefault(snp, list[Read]()).append(read)
+                    self.snp_reads.setdefault(snp, []).append(read)
                 else:
                     for snp in read.snps:
-                        self.snp_reads.setdefault(snp, list[Read]()).append(
+                        self.snp_reads.setdefault(snp, []).append(
                             Read({snp: read.snps[snp]}, read.count, -1)
                         )
         for root, snps in comp_snps.items():
@@ -204,7 +201,7 @@ class RNAGraph:
 
         # print 'in5', time.time()-_t
         # Calculate counts and LL for filtering
-        self.counts = dict[int, list[int]]()
+        self.counts = {}
         for snp in self.snp_reads:
             self.counts[snp] = [0, 0]
             for read in self.snp_reads[snp]:
@@ -213,7 +210,7 @@ class RNAGraph:
 
         # print 'in6', time.time()-_t
         # Assign DASE rates
-        self.rates = dict[int, list[float]]()
+        self.rates = {}
         for snps in comp_snps.values():
             reads = [read for snp in snps for read in self.snp_reads[snp]]
             rate = find_rates(snps, reads, 0.6)  # Choose adjacent snp rate
@@ -243,19 +240,19 @@ class RNAGraph:
         # print(f"[rate_cluster] size: {num(comp_snps)}")
 
         # Make SNP connected components
-        self.components, self.component_index = dict[int, Component](), dict[int, int]()
+        self.components, self.component_index = {}, {}
         for root, snps in comp_snps.items():
             if len(snps) > 1:
-                self.components[root] = Component(root, snps, list[Read]())
+                self.components[root] = Component(root, snps, [])
                 for snp in snps:
                     self.component_index[snp] = root
 
-    def rate_filter(self: RNAGraph, snps: dict[int, list[int]], rate_cutoff: float):
+    def rate_filter(self, snps, rate_cutoff: float):
         # High-confidence SNPs
         return {r: s for r, s in snps.items() if self.rates[r] and max(self.rates[r]) >= rate_cutoff}
 
-    def coverage_filter(self: RNAGraph, snps: dict[int, list[int]], coverage_cutoff: int):
-        new = dict[int, list[int]]()
+    def coverage_filter(self, snps, coverage_cutoff: int):
+        new = {}
         for r in snps:
             covered_snps = sorted([
                 snp for snp in snps[r] if sum(self.counts[snp]) > coverage_cutoff
@@ -264,7 +261,7 @@ class RNAGraph:
                 new[covered_snps[0]] = covered_snps
         return new
 
-    def size_cluster_filter(self: RNAGraph, snps: dict[int, list[int]], size_factor: int):
+    def size_cluster_filter(self, snps, size_factor: int):
         return {
             min(cluster): sorted(cluster)
             for r in snps
@@ -272,8 +269,8 @@ class RNAGraph:
             if cluster
         }
 
-    def rate_dependent_filter(self: RNAGraph, snps: dict[int, list[int]], cutoff: int, conf: float):
-        new = dict[int, list[int]]()
+    def rate_dependent_filter(self, snps, cutoff: int, conf: float):
+        new = {}
         for r in snps:
             confident_snps = sorted([
                 snp for snp in snps[r]
@@ -283,8 +280,8 @@ class RNAGraph:
                 new[confident_snps[0]] = confident_snps
         return new
 
-    def cutoff_filter(self: RNAGraph, snps: dict[int, list[int]], LL: dict[int, float], cutoff: float):
-        new = dict[int, list[int]]()
+    def cutoff_filter(self, snps, LL: Dict[int, float], cutoff: float):
+        new = {}
         for r in snps:
             confident_snps = sorted([
                 snp for snp in snps[r] if LL[snp] < cutoff
@@ -293,7 +290,7 @@ class RNAGraph:
                 new[confident_snps[0]] = confident_snps
         return new
 
-    def rate_cluster_filter(self: RNAGraph, snps: dict[int, list[int]], rate_factor: float):
+    def rate_cluster_filter(self, snps, rate_factor: float):
         return {
             min(cluster): sorted(cluster)
             for r in snps
@@ -301,11 +298,9 @@ class RNAGraph:
             if cluster
         }
 
-    def clusters_size(self: RNAGraph, snps: list[int], sum_factor: int):
-        def sort_key(a: tuple[int, float]) -> float:
-            return a[1]
+    def clusters_size(self, snps: List[int], sum_factor: int):
         tmp = {s: float(sum(self.counts[s])) for s in snps}
-        order = sorted(tmp.items(), key=sort_key)
+        order = sorted(tmp.items(), key=lambda a: a[1])
 
         clusters = [[order[0][0]]]
         for j in range(len(order) - 1):
@@ -317,14 +312,12 @@ class RNAGraph:
                 clusters.append([s1])
         return clusters
 
-    def clusters_rate(self: RNAGraph, snps: list[int], rate_factor: float):
-        def sort_key(a: tuple[int, float]) -> float:
-            return a[1]
+    def clusters_rate(self, snps: List[int], rate_factor: float):
         tmp = {
-            s: max(self.counts[s]) / float(sum(self.counts[s])) - 0.5 
+            s: max(self.counts[s]) / float(sum(self.counts[s])) - 0.5
             for s in snps if self.counts[s]
         }
-        order = sorted(tmp.items(), key=sort_key)
+        order = sorted(tmp.items(), key=lambda a: a[1])
 
         clusters = [[order[0][0]]]
         for j in range(len(order) - 1):
@@ -336,7 +329,7 @@ class RNAGraph:
                 clusters.append([s1])
         return clusters
 
-    def new_score(self: RNAGraph, snp: int, conf: float):
+    def new_score(self, snp: int, conf: float):
         pair = self.counts[snp]
         rates = self.rates[snp]
         r = conf * max(min(rates), 0.05) + 0.5 * (1 - conf)

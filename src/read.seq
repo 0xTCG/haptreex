@@ -6,48 +6,47 @@ class SNP:
     chr: str
     pos: int
     name: str
-    alleles: list[seq]
+    alleles: List[seq]
 
-    def __lt__(self: SNP, other: SNP):
+    def __lt__(self, other: SNP):
         return self.id < other.id
 
-    def __str__(self: SNP):
+    def __str__(self):
         return f"{self.chr}:{self.pos + 1}"
 
-    def __hash__(self: SNP):
+    def __hash__(self):
         return self.id.__hash__()
 
 
 class Read:
     id: int  # Unique read ID
     count: int  # Support
-    snps: dict[int, int]  # SNP ID -> Allele
+    snps: Dict[int, int]  # SNP ID -> Allele
     # The following are used in alg.py:read_val_tail
     special_snp: int  # SNP ID
-    rates: list[float]
+    rates: List[float]
 
-    def __init__(self: Read, snps: dict[int, int], count: int, id: int):
+    def __init__(self, snps: Dict[int, int], count: int, id: int):
         self.id = id
         self.count = count
         self.snps = snps
         self.special_snp = min(self.snps)
         self.rates = [0.5, 0.5]
 
-    def __eq__(self: Read, other: Read):
+    def __eq__(self, other: Read):
         return self.id == other.id and self.snps == other.snps
 
-    def __len__(self: Read):
+    def __len__(self):
         return len(self.snps)
 
-    def __str__(self: Read):
-        r = list[str]()
+    def __str__(self):
+        r = []
         for s in sorted(self.snps):
             r.append(f'{s}: {self.snps[s]}')
         return f'Read.({", ".join(r)}; {self.count})'
-        # return f'Read.{sorted(self.snps.enumerate())}'
 
 
-def sample_from_reads(reads: list[Read]) -> list[Read]:
+def sample_from_reads(reads: List[Read]):
     return [
         r if len(r) else Read(dict(choice(r.snps.items())), 1, r.id)
         for r in reads

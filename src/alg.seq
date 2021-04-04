@@ -11,18 +11,20 @@ CONFIDENCE = 0.5
 MAX_PHASES = 20000
 
 # haplotypes: (SNP ID -> Allele) dict for each haplotype
-type Phase(haplotypes: list[dict[int, int]], score: float)
-
+@tuple
+class Phase:
+    haplotypes: List[Dict[int, int]]
+    score: float
 
 def read_val_tail(
-    haplotypes: list[dict[int, int]],
+    haplotypes: List[Dict[int, int]],
     pair_threshold: float,
     error: float,
-    relevant_reads: list[Read],
+    relevant_reads: List[Read],
     last_snp: int,
     prev_snp: int,
     ploidy: int
-) -> float:
+):
     """
     we extend a phasing and then calculating how likely that extension is
     this looks at the prob of a particular phasing generating the set of reads
@@ -64,7 +66,7 @@ def read_val_tail(
     return val - val2
 
 
-def gen_config(p: int) -> list[int]:
+def gen_config(p: int):
     if p == 1:
         yield [0]
         yield [1]
@@ -74,22 +76,22 @@ def gen_config(p: int) -> list[int]:
                 yield [i]+l
 
 def branch(
-    phases: list[Phase],
+    phases: List[Phase],
     snp: int,
     prev_snp: int,
-    relevant_reads: list[Read],
+    relevant_reads: List[Read],
     threshold: float,
     pair_threshold: float,
     error: float,
     ploidy: int,
-    configs: list[list[int]]
-) -> list[Phase]:
+    configs: List[List[int]]
+):
     """
     Branch all solutions to highly probable solutions on one additional SNP
     lists include all current solutions.
     """
 
-    new_phases = list[Phase]()
+    new_phases = []
     costs = [0.0] * len(configs)
     for partial, score in phases:
         for i, config in enumerate(configs):
@@ -112,9 +114,9 @@ def branch(
     return new_phases
 
 
-def prune(phases: list[Phase], is_last: bool) -> list[Phase]:
+def prune(phases: List[Phase], is_last: bool):
     if not phases:
-        return list[Phase]()
+        return []
 
     # Prune solutions based on number of solutions and the threshold
     threshold = 1.0
@@ -145,12 +147,12 @@ def parallel(
     allow_allele_permutations: bool = True
 ):
     configs = list(gen_config(graph.ploidy))[1:-1]
-    phases = [Phase([dict[int, int]() for _ in range(graph.ploidy)], 0.0)]
+    phases = [Phase([{} for _ in range(graph.ploidy)], 0.0)]
     skipped = True  # set to allow allele permutations
     prev_snp = -1
     for snp in graph.components[root].nodes:
         if not phases:
-            return root, Phase(list[dict[int, int]](), 0.0)
+            return root, Phase([], 0.0)
         if allow_allele_permutations:
             phases = branch(
                 phases, snp, prev_snp, graph.snp_reads[snp], threshold, pair_threshold,
@@ -168,9 +170,9 @@ def phase(
     threshold: float,
     pair_threshold: float,
     error: float
-) -> dict[int, Phase]:
+):
     threshold = log(threshold / (1 - threshold))
-    result = list[tuple[int, Phase]]()
+    result = []
     lock = threading.Lock()
     ( graph.components.keys()
         ||> parallel(graph, ..., threshold, pair_threshold, error)
