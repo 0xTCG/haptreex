@@ -36,5 +36,8 @@ def make_solution(Gp: Tuple[Optional[Graph], Dict[int, Phase]], V: VCF, f: File,
                 print(snp + 1, file=f, end='\t')
                 for _, hap in haps:
                     print(phases[root].haplotypes[hap][snp], file=f, end='\t')
-                print(V.snps[snp].chr, V.snps[snp].pos + 1, file=f, sep='\t')
+                print(V.snps[snp].chr, V.snps[snp].pos + 1, file=f, sep='\t', end='')
+                for nuc in V.snps[snp].alleles:
+                    print(f'\t{nuc}', file=f, end='')
+                print(file=f)
             print("*****", file=f)
