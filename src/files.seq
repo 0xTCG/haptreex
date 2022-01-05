@@ -1,12 +1,10 @@
-from os.path import splitext
-from internal.file import is_binary
 from bio.bam import *
 
 from read import SNP, Read
 from graph import Graph
 from rna import Gene, RNAGraph
 from time import timing, time
-import sys, os
+import os
 
 
 TEMP_DIR = ''
@@ -23,13 +21,14 @@ class VCF:
     chromosomes: Dict[str, Tuple[int, int]]  # Chromosome name to the SNP span
     chr_ordered: List[str]
 
-    def __init__(self, path: str):
+    def __init__(self, path):
         """
         Parse a VCF file and return a dictionary of sorted SNPs:
             d := {chromosome_name: sorted([snp_1, snp_2])}
         and the corresponding line index
             {line_in_vcf: (chr, index in d[chr])}.
-        Each snp_i is a SNP that is heterozygous in the sample (i.e. |set(GT(snp_i))| > 1).
+        Each snp_i is a SNP that is heterozygous in the sample
+        (i.e. |set(GT(snp_i))| > 1).
         """
 
         self.snps, self.line_to_snp = [], {}
@@ -48,7 +47,7 @@ class VCF:
                 potential_alleles = [ref] + alt.split(',')
                 # Get only alleles that are specified in GT field
                 alleles = [
-                    seq(a)
+                    a
                     for i, a in enumerate(potential_alleles)
                     if str(i) in gt and len(a) == 1
                 ]
@@ -60,14 +59,18 @@ class VCF:
                     if chr not in self.chromosomes:
                         self.chr_ordered.append(chr)
                         if prev_chr:
-                            self.chromosomes[prev_chr] = (self.chromosomes[prev_chr][0], len(self.snps))
+                            self.chromosomes[prev_chr] = (
+                                self.chromosomes[prev_chr][0], len(self.snps)
+                            )
                         self.chromosomes[chr] = (len(self.snps), -1)
                         prev_chr = chr
                     self.snps.append(snp)
             if prev_chr:
-                self.chromosomes[prev_chr] = (self.chromosomes[prev_chr][0], len(self.snps))
+                self.chromosomes[prev_chr] = (
+                    self.chromosomes[prev_chr][0], len(self.snps)
+                )
 
-    def find_first(self, chr: str, pos: int):
+    def find_first(self, chr, pos):
         if chr not in self.chromosomes:
             return -1
         lo, hi = self.chromosomes[chr]
@@ -80,7 +83,7 @@ class VCF:
         return lo
 
 
-def parse_read(vcf: VCF, fragment: Dict[int, Set[int]], record: Tuple[int, int, int, CIGAR, seq, str]):
+def parse_read(vcf: VCF, fragment: Dict[int, Set[int]], record):
     ref, lo, hi, cigar, sequence, qual = record
     read = 0
     for sz, op in cigar:
@@ -91,9 +94,9 @@ def parse_read(vcf: VCF, fragment: Dict[int, Set[int]], record: Tuple[int, int, 
                     if ref + sz <= snp.pos:
                         break
                     t = read + (snp.pos - ref)
-                    if ref <= snp.pos and sequence[t] in snp.alleles:
-                        al = snp.alleles.index(sequence[t])
-                        if ord(qual[t]) - 33 >= 10:
+                    if ref <= snp.pos:
+                        al = snp.alleles.index(str(sequence[t]))
+                        if al != -1 and ord(qual[t]) - 33 >= 10:
                             fragment.setdefault(lo, set()).add(al)
                     lo += 1
                 read += sz
@@ -105,11 +108,10 @@ def parse_read(vcf: VCF, fragment: Dict[int, Set[int]], record: Tuple[int, int, 
 
 
 def correct_fragment(
-    name: str,
     fragment: Dict[int, Set[int]],
     cov: Dict[int, Set[int]], # @mutable
     reads: List[List[Tuple[int, int]]], # @mutable
-    threshold: int
+    threshold
 ):
     if len(fragment) == 0:
         return
@@ -124,16 +126,13 @@ def correct_fragment(
 
 
 def parse_bam(
-    vcf: VCF,
-    sam_path: str,
-    chr: str,
+    vcf, sam_path, chr,
     cov: Dict[int, Set[int]], # @mutable
     reads: List[List[Tuple[int, int]]], # @mutable
-    max_insert_size,
-    threshold: int = 1
+    max_insert_size, threshold = 1
 ):
     parse = parse_read(vcf, ...)
-    correct = correct_fragment('', cov=cov, reads=reads, threshold=threshold, ...)
+    correct = correct_fragment(cov=cov, reads=reads, threshold=threshold, ...)
     seen = {}
     with BAM(sam_path, chr, copy=False) as sam:
         vlo, vhi = vcf.chromosomes[chr]
@@ -180,7 +179,7 @@ def parse_bam(
             correct(parse({}, read))
 
 
-def correct_fragment_10x(name: str, BX: str, XC: int, pos: int, fragment: Dict[int, Set[int]], threshold: int, fo: File):
+def correct_fragment_10x(name, BX, XC, pos, fragment, threshold, fo):
     count = len(fragment) - sum(1 for i in list(fragment) if len(fragment[i]) > 1)
     if count >= threshold:
         fo.write(f'{BX} {XC} {pos} {name}')
@@ -191,7 +190,7 @@ def correct_fragment_10x(name: str, BX: str, XC: int, pos: int, fragment: Dict[i
 
 
 def parse_bam_10x(
-    vcf: VCF, sam_path: str, chr: str,
+    vcf, sam_path, chr,
     cov: Dict[int, Set[int]], # @mutable
     reads: List[List[Tuple[int, int]]], # @mutable
     max_insert_size
@@ -199,7 +198,7 @@ def parse_bam_10x(
     fo = open(f'{TEMP_DIR}/{chr}', 'w')
     parse = parse_read(vcf, ...)
     correct = correct_fragment_10x(threshold=1, fo=fo, ...)
-    correct2 = correct_fragment('', cov=cov, reads=reads, threshold=1, ...)
+    correct2 = correct_fragment(cov=cov, reads=reads, threshold=1, ...)
 
     seen, barcodes = {}, {}
     with BAM(sam_path, chr, copy=False) as sam:
@@ -322,7 +321,7 @@ def parse_fragmat(vcf: VCF, fragmat: str, chr: str, cov: Dict[int, Set[int]], re
                 reads.append(alleles)
 
 
-def parse_phases(vcf: VCF, paths: List[Tuple[str, int]], r_chr: str, skip_single: bool = True, is_tenx: bool = False):
+def parse_phases(vcf, paths, r_chr, skip_single = True, is_tenx = False):
     reads = []
     for path, max_insert_size in paths:
         # print 'Reading', r_chr, is_tenx, path, max_insert_size
@@ -392,3 +391,31 @@ def load_dna_data(
         r.special_snp = sorted(r.snps)[1]
         r.rates = [1.0/ploidy] * ploidy
     return Graph(reads, ploidy)
+
+
+def load_aldy_data(path, ploidy = 2):
+    snp_id = {}
+    reads = []
+    snps = []
+    with open(path) as f:
+        for l in f:
+            cols = l.strip().split(';')
+            cov = int(cols[0])
+            items = {}
+            for c in cols[1:]:
+                p = c.split(',')
+                pos = int(p[0])
+                if pos in snp_id:
+                    if p[1] not in snp_id[pos][1]:
+                        snp_id[pos][1].append(p[1])
+                else:
+                    snp_id[pos] = (len(snp_id), [p[1]])
+                id = snp_id[pos][0]
+                al = snp_id[pos][1].index(p[1])
+                items[id] = al
+            reads.append(Read(items, cov, len(reads)))
+            reads[-1].special_snp = sorted(reads[-1].snps)[1]
+            reads[-1].rates = [1.0 / ploidy] * ploidy
+    snps = [SNP(id, 'aldy', pos, '', alleles) for pos, (id, alleles) in snp_id.items()]
+    vcf = VCF(snps, {}, {'aldy': (0, len(snps))}, ['aldy'])
+    return vcf, Graph(reads, ploidy)

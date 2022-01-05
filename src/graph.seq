@@ -1,4 +1,5 @@
 from read import Read
+from time import timing
 
 
 class Node:
@@ -63,17 +64,19 @@ class Graph:
         self.reads = reads
         self.ploidy = ploidy
 
-        self.snps = sorted({s for r in reads for s in r.snps})
-        # print(f"{len(self.snps)} SNPs in non-trivial connected components")
-        adj = {i: set() for i in self.snps}  # SNP -> adj. SNPs
-        for r in reads:
-            for i in r.snps:
-                for j in r.snps:
-                    adj[i].add(j)
-        self.nodes = {snp: Node(snp, adj[snp]) for snp in self.snps}
+        with timing('nodes'):
+            self.snps = sorted({s for r in reads for s in r.snps})
+            # print(f"{len(self.snps)} SNPs in non-trivial connected components")
+            adj = {i: set() for i in self.snps}  # SNP -> adj. SNPs
+            for r in reads:
+                for i in r.snps:
+                    for j in r.snps:
+                        adj[i].add(j)
+            self.nodes = {snp: Node(snp, adj[snp]) for snp in self.snps}
 
-        # Build connected components
-        self.components, self.component_index = build_components(self.nodes)
+        with timing('components'):
+            # Build connected components
+            self.components, self.component_index = build_components(self.nodes)
 
         self.snp_reads = {s: [] for s in self.snps}  # SNP -> List of reads
         for r in self.reads:

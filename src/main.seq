@@ -29,7 +29,7 @@ def mkdtemp(template: str):
         raise OSError("mkdtemp failed")
 
 @extend
-class List[T]:
+class List:
     def lock_append(self, it: T, lock: Lock):
         with lock:
             self.append(it)
@@ -41,7 +41,7 @@ PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR, RNA_PARAMS = \
 def parse_args(argv):
     global PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR, PLOIDY
     try:
-        opts, args = getopt(
+        opts, _ = getopt(
             argv,
             "hv:d:r:g:i:o:dp:z:",
             [
@@ -58,10 +58,12 @@ def parse_args(argv):
                 "pair-threshold",
                 "phase-error",
                 "z=",
-                "10x"
+                "10x",
+                "aldy="
             ]
         )
         vcf, dna, rna, gene, isoforms, output, tenx = "", "", "", "", "", "", False
+        aldy = ""
         for o, a in opts:
             if o in ["-h", "--help"]: sys.exit(0)
             elif o in ['-v', '--vcf']: vcf = a
@@ -77,8 +79,9 @@ def parse_args(argv):
             elif o == "--phase-threshold": PHASE_THRESHOLD = float(a)
             elif o == "--pair-threshold": PAIR_THRESHOLD = float(a)
             elif o == "--phase-error": PHASE_ERROR = float(a)
+            elif o == "--aldy": aldy = a
             else: assert False, f"unhandled option {o}"
-        return vcf, dna, rna, gene, output, isoforms, tenx
+        return vcf, dna, rna, gene, output, isoforms, aldy, tenx
     except GetoptError as err:
         raise ValueError(err.message)
 
@@ -103,12 +106,25 @@ def parse_chromosome(chr, vcf, dna, rna, genes, isoforms, tenx):
             phases = alg.phase(g, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
             return g, phases
 
+
+def phase_aldy_data(aldy, out):
+    vcf, g = files.load_aldy_data(aldy, PLOIDY)
+    phases = alg.phase(g, PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR)
+    lock = threading.Lock()
+    with open(out, "w") as f:
+        output.make_solution((Optional[Graph](g), phases), vcf, f, lock)
+
+
 def main(argv):
     global TEMP_DIR, MAX_PHASES
     print('HapTree-X v2.0')
     random.seed(51)
 
-    vcf_path, dna, rna, gtf, out, isoforms, tenx = parse_args(argv)
+    vcf_path, dna, rna, gtf, out, isoforms, aldy, tenx = parse_args(argv)
+
+    if aldy != '':
+        phase_aldy_data(aldy, out)
+        return
 
     print(f'Ploidy: {PLOIDY}')
     print(f"Loading VCF file {vcf_path}...")
@@ -138,9 +154,10 @@ def main(argv):
         MAX_PHASES = 20
         PHASE_THRESHOLD, PAIR_THRESHOLD, PHASE_ERROR= 0.001, 0.7, 0.03
     with open(out, "w") as f:
-        ( iter(vcf.chr_ordered)
-          ||> parse_chromosome(vcf, dna, rna, genes, isoforms, tenx)
-          |>  output.make_solution(vcf, f, lock) )
+        @par
+        for chr in vcf.chr_ordered:
+            r = parse_chromosome(chr, vcf, dna, rna, genes, isoforms, tenx)
+            output.make_solution(r, vcf, f, lock)
     print(f'HapTree-X done--- the results can be found in {out}')
 
 try:

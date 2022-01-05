@@ -4,7 +4,8 @@ CLANG := clang
 all: haptreex
 
 haptreex:
-	seqc build -release -o build/haptreex src/main.seq
+	SEQ_LIBRARY_PATH=~/.seq/lib/seq ~/.seq/bin/seqc build -release -o haptreex src/main.seq
+	patchelf --set-rpath '$$ORIGIN' haptreex
 
 clean:
 	rm -rf build

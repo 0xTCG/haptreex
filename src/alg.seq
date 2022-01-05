@@ -7,14 +7,17 @@ from graph import Graph
 
 import threading
 
+
 CONFIDENCE = 0.5
 MAX_PHASES = 20000
+
 
 # haplotypes: (SNP ID -> Allele) dict for each haplotype
 @tuple
 class Phase:
     haplotypes: List[Dict[int, int]]
     score: float
+
 
 def read_val_tail(
     haplotypes: List[Dict[int, int]],
@@ -148,7 +151,6 @@ def parallel(
 ):
     configs = list(gen_config(graph.ploidy))[1:-1]
     phases = [Phase([{} for _ in range(graph.ploidy)], 0.0)]
-    skipped = True  # set to allow allele permutations
     prev_snp = -1
     for snp in graph.components[root].nodes:
         if not phases:
@@ -174,9 +176,10 @@ def phase(
     threshold = log(threshold / (1 - threshold))
     result = []
     lock = threading.Lock()
-    ( graph.components.keys()
-        ||> parallel(graph, ..., threshold, pair_threshold, error)
-        |>  result.lock_append(lock) )
+    @par
+    for root in graph.components.keys():
+        p = parallel(graph, root, threshold, pair_threshold, error)
+        result.lock_append(p, lock)
     return {
         result[i][0]: result[i][1]
         for i in range(len(graph.components))
